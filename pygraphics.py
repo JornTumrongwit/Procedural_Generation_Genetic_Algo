@@ -65,9 +65,12 @@ class Cube:
         self.height = 3.0
         self.depth = 1.0
         self.pos_x = 0.0
-        self.pos_z = 0.0
+        self.pos_z = 10.0
         self.pos_y = 0.0
+        self.zoom = 0.3
         self.aspect = len(bitmap[0])/len(bitmap)
+        self.eye = glm.vec3(0.0, 3.0, 5.0)
+        self.up = glm.vec3(0.0, 1.0, 0.0)
 
     # Initialize
     def init(self):
@@ -87,18 +90,18 @@ class Cube:
         glLoadIdentity()
 
         # Set the camera
-        gluLookAt(self.viewrotate_x, self.viewrotate_y, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        gluLookAt(self.eye[0], self.eye[1], self.eye[2], 0.0, 0.0, 0.0, self.up[0], self.up[1], self.up[2])
 
         #object transforms
         glRotatef(self.rotate_y, 0.0, 1.0, 0.0)
         glRotatef(self.rotate_x, 1.0, 0.0, 0.0)
-        glScalef(self.scale*self.width, self.scale*self.height, self.scale*self.depth)
+        glScalef(self.scale*self.width *self.zoom, self.scale*self.height*self.zoom, self.scale*self.depth*self.zoom)
         glTranslatef(self.pos_x, self.pos_y, self.pos_z)
 
         # Draw solid cube
         for i in range(10):
             glutSolidCube(1.0)
-            glTranslatef(i * 3, 0.0, 0.0)
+            glTranslatef(i, 0.0, i)
 
         glFlush()
 
@@ -123,19 +126,35 @@ class Cube:
 
         # Rotate cube according to keys pressed
         if key == GLUT_KEY_RIGHT:
-            self.viewrotate_y += 5
+            rot = glm.rotate(glm.mat4(1.0), -0.1, glm.normalize(self.up))
+            self.eye = rot * self.eye
         if key == GLUT_KEY_LEFT:
-            self.viewrotate_y -= 5
+            rot = glm.rotate(glm.mat4(1.0), 0.1, glm.normalize(self.up))
+            self.eye = rot * self.eye
         if key == GLUT_KEY_UP:
-            self.viewrotate_x += 5
+            axis = glm.cross(self.eye, self.up)
+            rot = glm.rotate(glm.mat4(1.0), 0.1, glm.normalize(axis))
+            self.up = rot * self.up
+            self.eye = rot * self.eye
         if key == GLUT_KEY_DOWN:
-            self.viewrotate_x -= 5
+            axis = glm.cross(self.eye, self.up)
+            rot = glm.rotate(glm.mat4(1.0), -0.1, glm.normalize(axis))
+            self.up = rot * self.up
+            self.eye = rot * self.eye
         glutPostRedisplay()
+    
+    # The normal keyboard controls
+    def keyb(self, key, x, y):
+        if key == b'+' or key == b'=':
+            self.zoom *= 1.1
+        elif key == b'-' or key == b'_':
+            self.zoom /= 1.1
+        glutPostRedisplay()
+
 
 
 # The main function
 def main():
-
     # Initialize OpenGL
     glutInit(sys.argv)
 
@@ -162,6 +181,9 @@ def main():
 
     # The callback function for keyboard controls
     glutSpecialFunc(cube.special)
+
+    # The callback function for normal keyboard controls
+    glutKeyboardFunc(cube.keyb)
 
     # Start the main loop
     glutMainLoop()
