@@ -4,12 +4,14 @@ import numpy as np
 import random
 import math
 import time
+import cv2
 # OpenGL imports for python
 try:
     from OpenGL.GL import *
     from OpenGL.GLU import *
     from OpenGL.GLUT import *
     import glm
+    import glfw
 except:
     print("OpenGL wrapper for python not found")
 
@@ -18,6 +20,7 @@ image = 'testimage.png'
 
 asurf = pygame.image.load('testimage.png')
 bitmap = pygame.surfarray.array2d(asurf)
+im = cv2.imread(image)
 start = time.time()
 
 #class for tower generation
@@ -32,23 +35,25 @@ class Tower:
     
 towcount = 64
 heightmin = 3
-xlen = 300
+heightmax = 600
+widthmin = 0.1
+widthmax = 2
+depthmin = 0.1
+depthmax = 2
+xlen = 200
+zlen = 100
+xmod = 15
+heightmod = 200
 height = xlen * (len(bitmap[0])/len(bitmap)) #setting aspect ratio
 
 #tower generation
 towers = []
-x = random.uniform(0, xlen)
-z = random.uniform(0, xlen)
-height = random.uniform(0, height)
-width = random.uniform(0, xlen)
-depth = random.uniform(0, xlen)
-towers.append(Tower(height, width, depth, x, z, 0.0))
-for tower in range(towcount-1):
-    x = random.uniform(0, xlen)
-    z = random.uniform(0, xlen)
-    height = random.uniform(0, height)
-    width = random.uniform(0, xlen)
-    depth = random.uniform(0, xlen)
+for tower in range(towcount):
+    x = random.uniform(-xlen/10, xlen/10)
+    z = random.uniform(-zlen/10, zlen/10)
+    height = random.uniform(heightmin, heightmax)
+    width = random.uniform(widthmin, widthmax)
+    depth = random.uniform(depthmin, depthmax)
     towers.append(Tower(height, width, depth, x, z, 0.0))
 
 # The cube class
@@ -60,12 +65,11 @@ class Cube:
         self.rotate_x = 0.0
         self.viewrotate_y = 0.0
         self.viewrotate_x = 0.0
-        self.scale = 1.0
         self.width = 1.0
-        self.height = 3.0
+        self.height = 2.0
         self.depth = 1.0
-        self.pos_x = 0.0
-        self.pos_z = 10.0
+        self.pos_x = 5.0
+        self.pos_z = 0.0
         self.pos_y = 0.0
         self.zoom = 0.3
         self.aspect = len(bitmap[0])/len(bitmap)
@@ -92,16 +96,17 @@ class Cube:
         # Set the camera
         gluLookAt(self.eye[0], self.eye[1], self.eye[2], 0.0, 0.0, 0.0, self.up[0], self.up[1], self.up[2])
 
-        #object transforms
-        glRotatef(self.rotate_y, 0.0, 1.0, 0.0)
-        glRotatef(self.rotate_x, 1.0, 0.0, 0.0)
-        glScalef(self.scale*self.width *self.zoom, self.scale*self.height*self.zoom, self.scale*self.depth*self.zoom)
-        glTranslatef(self.pos_x, self.pos_y, self.pos_z)
-
         # Draw solid cube
         for i in range(10):
-            glutSolidCube(1.0)
-            glTranslatef(i, 0.0, i)
+            #object transforms
+            glPushMatrix()
+            glRotatef(self.rotate_y, 0.0, 1.0, 0.0)
+            glRotatef(self.rotate_x, 1.0, 0.0, 0.0)
+            glScalef(self.width *self.zoom, self.height*self.zoom, self.depth*self.zoom)
+            glTranslatef(self.pos_x, self.pos_y, self.pos_z)
+            glutWireCube(1.0)
+            glPopMatrix()
+            
 
         glFlush()
 
@@ -151,43 +156,76 @@ class Cube:
             self.zoom /= 1.1
         glutPostRedisplay()
 
-
-
 # The main function
 def main():
-    # Initialize OpenGL
-    glutInit(sys.argv)
+    d_width = len(im[0])
+    d_height = len(im)
+    if display:
+        # Initialize OpenGL
+        glutInit(sys.argv)
+        
+        # Set display mode
+        glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
 
-    # Set display mode
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
+        # Set size and position of window size
+        glutInitWindowSize(d_width, d_height)
+        glutInitWindowPosition(0, 10)
 
-    # Set size and position of window size
-    glutInitWindowSize(len(bitmap[0]), len(bitmap))
-    glutInitWindowPosition(0, 10)
+        # Create window with given title
+        glutCreateWindow("Cube")
 
-    # Create window with given title
-    glutCreateWindow("Cube")
+        # Instantiate the cube
+        cube = Cube()
 
-    # Instantiate the cube
-    cube = Cube()
+        cube.init()
 
-    cube.init()
+        # The callback for display function
+        glutDisplayFunc(cube.display)
 
-    # The callback for display function
-    glutDisplayFunc(cube.display)
+        # The callback for reshape function
+        glutReshapeFunc(cube.reshape)
 
-    # The callback for reshape function
-    glutReshapeFunc(cube.reshape)
+        # The callback function for keyboard controls
+        glutSpecialFunc(cube.special)
 
-    # The callback function for keyboard controls
-    glutSpecialFunc(cube.special)
+        # The callback function for normal keyboard controls
+        glutKeyboardFunc(cube.keyb)
+        glutMainLoop()
+    else:
+        # Initialize the library
+        if not glfw.init():
+            return
+        # Set window hint NOT visible
+        glfw.window_hint(glfw.VISIBLE, False)
+        # Create a windowed mode window and its OpenGL context
+        window = glfw.create_window(d_width, d_height, "hidden window", None, None)
+        if not window:
+            glfw.terminate()
+            return
 
-    # The callback function for normal keyboard controls
-    glutKeyboardFunc(cube.keyb)
+        # Make the window's context current
+        glfw.make_context_current(window)
 
-    # Start the main loop
-    glutMainLoop()
+        glutInit(sys.argv)
+        
+        # Instantiate the cube
+        cube = Cube()
 
+        cube.init()
+        
+        cube.reshape(d_width, d_height)
+        cube.display()
+        
+        image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
+        imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
+        imagearr = np.flip(imagearr, 0)
+
+        cv2.imwrite(r"testresult.png", imagearr)
+
+        glfw.destroy_window(window)
+        glfw.terminate()
+    
+display = False
 # Call the main function
 if __name__ == '__main__':
     main()
