@@ -25,7 +25,7 @@ start = time.time()
 
 #class for tower generation
 class Tower:
-    def __init__(self, height, width, depth, x, y, rotation) -> None:
+    def __init__(self, height, width, depth, x, z, rotation) -> None:
         self.height = height
         self.width = width
         self.depth = depth
@@ -33,14 +33,14 @@ class Tower:
         self.z = z
         self.rotation = rotation
     
-towcount = 64
+towcount = 200
 heightmin = 3
-heightmax = 600
-widthmin = 0.1
-widthmax = 2
-depthmin = 0.1
-depthmax = 2
-xlen = 200
+heightmax = 1200
+widthmin = 0.5
+widthmax = 4
+depthmin = 0.5
+depthmax = 4
+xlen = 600
 zlen = 100
 xmod = 15
 heightmod = 200
@@ -49,12 +49,13 @@ height = xlen * (len(bitmap[0])/len(bitmap)) #setting aspect ratio
 #tower generation
 towers = []
 for tower in range(towcount):
-    x = random.uniform(-xlen/10, xlen/10)
-    z = random.uniform(-zlen/10, zlen/10)
-    height = random.uniform(heightmin, heightmax)
+    z = random.uniform(-18, 18)
+    x = random.uniform(-(27-z/1.5), 27-z/1.5)
+    height = random.uniform(heightmin/50, heightmax/50)
     width = random.uniform(widthmin, widthmax)
-    depth = random.uniform(depthmin, depthmax)
-    towers.append(Tower(height, width, depth, x, z, 0.0))
+    depth = random.uniform(depthmin, depthmax)*width
+    rotation = random.uniform(0, 2*math.pi)
+    towers.append(Tower(height, width, depth, x, z, rotation))
 
 # The cube class
 class Cube:
@@ -70,11 +71,18 @@ class Cube:
         self.depth = 1.0
         self.pos_x = 5.0
         self.pos_z = 0.0
-        self.pos_y = 0.0
-        self.zoom = 0.3
+        self.pos_y = 0.5
+        self.zoom = 0.2
         self.aspect = len(bitmap[0])/len(bitmap)
         self.eye = glm.vec3(0.0, 3.0, 5.0)
+        self.def_eye = self.eye
+        self.center = glm.vec3(0.0, -1.0, 0.0)
+        self.def_center = self.center
         self.up = glm.vec3(0.0, 1.0, 0.0)
+        x = glm.cross(self.up, self.eye)
+        y = glm.cross(self.eye, x)
+        self.up = glm.normalize(y)
+        self.def_up = self.up
 
     # Initialize
     def init(self):
@@ -94,17 +102,16 @@ class Cube:
         glLoadIdentity()
 
         # Set the camera
-        gluLookAt(self.eye[0], self.eye[1], self.eye[2], 0.0, 0.0, 0.0, self.up[0], self.up[1], self.up[2])
-
+        gluLookAt(self.eye[0], self.eye[1], self.eye[2], 0.0, self.center[1], 0.0, self.up[0], self.up[1], self.up[2])
+        glScalef(self.zoom, self.zoom, self.zoom)
         # Draw solid cube
-        for i in range(10):
+        for tower in towers:
             #object transforms
             glPushMatrix()
-            glRotatef(self.rotate_y, 0.0, 1.0, 0.0)
-            glRotatef(self.rotate_x, 1.0, 0.0, 0.0)
-            glScalef(self.width *self.zoom, self.height*self.zoom, self.depth*self.zoom)
-            glTranslatef(self.pos_x, self.pos_y, self.pos_z)
-            glutWireCube(1.0)
+            glRotatef(tower.rotation, 1.0, 0.0, 0.0)
+            glTranslatef(tower.x, self.pos_y*tower.height, tower.z)
+            glScalef(tower.width, tower.height, tower.depth)
+            glutSolidCube(1.0)
             glPopMatrix()
             
 
@@ -126,26 +133,28 @@ class Cube:
         self.aspect = w/h
         glMatrixMode(GL_MODELVIEW)
 
+    def rotate_left(self, degree):
+        rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(self.up))
+        self.eye = rot * (self.eye-self.center) + self.center
+    
+    def rotate_up(self, degree):
+        axis = glm.cross(self.eye, self.up)
+        rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(axis))
+        self.up = rot * self.up
+        self.eye = rot * (self.eye-self.center) + self.center      
+
     # The keyboard controls
     def special(self, key, x, y):
 
         # Rotate cube according to keys pressed
         if key == GLUT_KEY_RIGHT:
-            rot = glm.rotate(glm.mat4(1.0), -0.1, glm.normalize(self.up))
-            self.eye = rot * self.eye
+            self.rotate_left(-0.1)
         if key == GLUT_KEY_LEFT:
-            rot = glm.rotate(glm.mat4(1.0), 0.1, glm.normalize(self.up))
-            self.eye = rot * self.eye
+            self.rotate_left(0.1)
         if key == GLUT_KEY_UP:
-            axis = glm.cross(self.eye, self.up)
-            rot = glm.rotate(glm.mat4(1.0), 0.1, glm.normalize(axis))
-            self.up = rot * self.up
-            self.eye = rot * self.eye
+            self.rotate_up(0.1)
         if key == GLUT_KEY_DOWN:
-            axis = glm.cross(self.eye, self.up)
-            rot = glm.rotate(glm.mat4(1.0), -0.1, glm.normalize(axis))
-            self.up = rot * self.up
-            self.eye = rot * self.eye
+            self.rotate_up(-0.1)
         glutPostRedisplay()
     
     # The normal keyboard controls
@@ -154,6 +163,10 @@ class Cube:
             self.zoom *= 1.1
         elif key == b'-' or key == b'_':
             self.zoom /= 1.1
+        elif key == b'r':
+            self.eye = self.def_eye
+            self.center = self.def_center
+            self.up = self.def_up
         glutPostRedisplay()
 
 # The main function
@@ -225,7 +238,7 @@ def main():
         glfw.destroy_window(window)
         glfw.terminate()
     
-display = False
+display = True
 # Call the main function
 if __name__ == '__main__':
     main()
