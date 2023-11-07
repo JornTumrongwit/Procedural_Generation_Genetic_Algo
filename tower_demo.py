@@ -25,8 +25,8 @@ start = time.time()
 
 #mode parameters
 depth_test = True
-display = False
-wire = False
+display = True
+wire = True
 
 #class for tower generation
 class Tower:
@@ -78,7 +78,7 @@ class Cube:
         self.aspect = len(im[0])/len(im)
         self.eye = glm.vec3(0.0, 3.0, 5.0)
         self.def_eye = self.eye
-        self.center = glm.vec3(0.0, -1.0, 0.0)
+        self.center = glm.vec3(0.0, 0.0, 0.0)
         self.def_center = self.center
         self.up = glm.vec3(0.0, 1.0, 0.0)
         x = glm.cross(self.up, self.eye-self.center)
