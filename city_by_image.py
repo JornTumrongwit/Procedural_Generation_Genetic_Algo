@@ -1,35 +1,40 @@
-import pygame
 import matplotlib.pyplot as plt
 import numpy as np
 import random
 import math
 import time
+import cv2
 # OpenGL imports for python
 try:
     from OpenGL.GL import *
     from OpenGL.GLU import *
     from OpenGL.GLUT import *
+    import glm
+    import glfw
 except:
     print("OpenGL wrapper for python not found")
 
 #image
 image = 'testimage.png'
 
-asurf = pygame.image.load('testimage.png')
-bitmap = pygame.surfarray.array2d(asurf)
-start = time.time()
+im = cv2.imread(image)
+im = np.divide(im, 255/2)
+im = np.add(im, -1)
+bestscore = np.sum(np.multiply(im, im))
 # set up the figure and axes
 fig = plt.figure()
 ax1 = fig.add_subplot(111, projection='3d')
 
-#class for tower types
+start = time.time()
+
+#class for tower generation
 class Tower:
-    def __init__(self, height, width, depth, x, y, rotation) -> None:
+    def __init__(self, height, width, depth, x, z, rotation) -> None:
         self.height = height
         self.width = width
         self.depth = depth
         self.x = x
-        self.y = y
+        self.z = z
         self.rotation = rotation
 
 #clamp helper
@@ -37,10 +42,18 @@ def clamp(num, min, max):
     low = max(num, min)
     return min(max, low)
 
-towcount = 64
+towcount = 100
 heightmin = 3
-xlen = 300
-zlen = xlen * (len(bitmap[0])/len(bitmap)) #setting aspect ratio
+heightmax = 600
+widthmin = 0.5
+widthmax = 4
+depthmin = 0.5
+depthmax = 2
+xlen = 600
+zlen = 100
+xmod = 15
+heightmod = 200
+height = xlen * (len(im[0])/len(im)) #setting aspect ratio
 
 #procedural generation parameters
 generations = 25
@@ -58,121 +71,147 @@ for tower in range(towcount):
     depth = random.uniform(0, xlen)
     towers.append(Tower(height, width, depth, x, y))
 
-# The cube class
-class Cube:
+# The main function
+def renderAndScore(towers):
+    d_width = len(im[0])
+    d_height = len(im)
+    # The cube class
+    class Cube:
 
-    # Constructor for the cube class
-    def __init__(self):
-        self.rotate_y = 0.0
-        self.rotate_x = 0.0
-        self.scale = 1.0
-        self.width = 1.0
-        self.height = 3.0
-        self.depth = 1.0
-        self.pos_x = 0.0
-        self.pos_z = 0.0
-        self.pos_y = 0.0
+        # Constructor for the cube class
+        def __init__(self):
+            self.rotate_y = 0.0
+            self.rotate_x = 0.0
+            self.width = 1.0
+            self.height = 2.0
+            self.depth = 1.0
+            self.pos_x = 5.0
+            self.pos_z = 0.0
+            self.zoom = 0.2
+            self.aspect = len(im[0])/len(im)
+            self.eye = glm.vec3(0.0, 3.0, 5.0)
+            self.def_eye = self.eye
+            self.center = glm.vec3(0.0, -1.0, 0.0)
+            self.def_center = self.center
+            self.up = glm.vec3(0.0, 1.0, 0.0)
+            x = glm.cross(self.up, self.eye-self.center)
+            y = glm.cross(self.eye-self.center, x)
+            self.up = glm.normalize(y)
+            self.def_up = self.up
 
-    # Initialize
-    def init(self):
-        # Set background to black
-        glClearColor(0.0, 0.0, 0.0, 0.0)
+        # Initialize
+        def init(self):
+            # Set background to black
+            glClearColor(0.0, 0.0, 0.0, 0.0)
 
-        # Set the shade model to flat
-        glShadeModel(GL_FLAT)
-
-    # Draw cube
-    def draw(self):
-
-        # Set the color to white
-        glColor3f(1.0, 1.0, 1.0)
-
-        # Reset the matrix
-        glLoadIdentity()
-
-        # Set the camera
-        gluLookAt(0.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
-        
-        #object transforms
-        glRotatef(self.rotate_y, 0.0, 1.0, 0.0)
-        glRotatef(self.rotate_x, 1.0, 0.0, 0.0)
-        glScalef(self.scale*self.width, self.scale*self.height, self.scale*self.depth)
-        glTranslatef(self.pos_x, self.pos_y, self.pos_z)
-
-        # Draw solid cube
-        for i in range(300):
-            glutSolidCube(1.0)
-            glRotatef(math.radians(i), 1.0, 0.0, 0.0)
-            glTranslatef(i/300, 0.0, 0.0)
-
-        glFlush()
-
-    # The display function
-    def display(self):
-        glClear(GL_COLOR_BUFFER_BIT)
+            # Set the shade model to flat
+            glShadeModel(GL_FLAT)
+            
 
         # Draw cube
-        self.draw()
+        def draw(self):
 
-    # The reshape function
-    def reshape(self, w, h):
-        glViewport(0, 0, GLsizei(w), GLsizei(h))
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glFrustum(-1.0, 1.0, -1.0, 1.0, 1.5, 20.0)
-        glMatrixMode(GL_MODELVIEW)
+            # Reset the matrix
+            glLoadIdentity()
 
-    # The keyboard controls
-    def special(self, key, x, y):
+            # Set the camera
+            gluLookAt(self.eye[0], self.eye[1], self.eye[2], self.center[0], self.center[1], self.center[0], self.up[0], self.up[1], self.up[2])
+            glScalef(self.zoom, self.zoom, self.zoom)
+            # Draw solid cube
+            for tower in towers:
+                #object transforms
+                glPushMatrix()
+                glColor3f(1.0, 1.0, 1.0)
+                glRotatef(tower.rotation, 0.0, 1.0, 0.0)
+                glTranslatef(tower.x, 0.0, tower.z)
+                glScalef(tower.width, tower.height, tower.depth)
+                glTranslatef(0.5, 0.5, 0.5)
+                glutSolidCube(1.0)
+                glPopMatrix()
+                
 
-        # Rotate cube according to keys pressed
-        if key == GLUT_KEY_RIGHT:
-            self.rotate_y += 5
-        if key == GLUT_KEY_LEFT:
-            self.rotate_y -= 5
-        if key == GLUT_KEY_UP:
-            self.rotate_x += 5
-        if key == GLUT_KEY_DOWN:
-            self.rotate_x -= 5
-        glutPostRedisplay()
+            glFlush()
 
+        # The display function
+        def display(self):
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-# The main function
-def main():
+            # Draw cube
+            self.draw()
 
-    # Initialize OpenGL
-    glutInit(sys.argv)
+        # The reshape function
+        def reshape(self, w, h):
+            glViewport(0, 0, GLsizei(w), GLsizei(h))
+            glMatrixMode(GL_PROJECTION)
+            glLoadIdentity()
+            glFrustum(-1.0*w/h, 1.0*w/h, -1.0, 1.0, 1.5, 50.0)
+            self.aspect = w/h
+            glMatrixMode(GL_MODELVIEW)
 
-    # Set display mode
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
+        def rotate_left(self, degree):
+            rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(self.up))
+            self.eye = rot * (self.eye)
+        
+        def rotate_up(self, degree):
+            axis = glm.cross(self.eye, self.up)
+            rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(axis))
+            self.up = rot * self.up
+            self.eye = rot * (self.eye)  
 
-    # Set size and position of window size
-    glutInitWindowSize(400, 400)
-    glutInitWindowPosition(100, 100)
+        # The keyboard controls
+        def special(self, key, x, y):
 
-    # Create window with given title
-    glutCreateWindow("Cube")
-
+            # Rotate cube according to keys pressed
+            if key == GLUT_KEY_RIGHT:
+                self.rotate_left(-0.1)
+            if key == GLUT_KEY_LEFT:
+                self.rotate_left(0.1)
+            if key == GLUT_KEY_UP:
+                self.rotate_up(0.1)
+            if key == GLUT_KEY_DOWN:
+                self.rotate_up(-0.1)
+            glutPostRedisplay()
+        
+        # The normal keyboard controls
+        def keyb(self, key, x, y):
+            if key == b'+' or key == b'=':
+                self.zoom *= 1.1
+            elif key == b'-' or key == b'_':
+                self.zoom /= 1.1
+            elif key == b'r':
+                self.eye = self.def_eye
+                self.center = self.def_center
+                self.up = self.def_up
+            glutPostRedisplay()
     # Instantiate the cube
     cube = Cube()
 
     cube.init()
+    
+    cube.reshape(d_width, d_height)
+    cube.display()
+    
+    image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
+    imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
+    imagearr = np.flip(imagearr, 0)
+    im2 = np.divide(imagearr, 255/2)
+    im2 = np.add(im2, -1)
+    score = np.sum(np.multiply(im, im2))
+    print(score)
+    return score/bestscore
 
-    # The callback for display function
-    glutDisplayFunc(cube.display)
+# Initialize the library
+glfw.init()
 
-    # The callback for reshape function
-    glutReshapeFunc(cube.reshape)
+# Set window hint NOT visible
+glfw.window_hint(glfw.VISIBLE, False)
+# Create a windowed mode window and its OpenGL context
+window = glfw.create_window(d_width, d_height, "hidden window", None, None)
+# Make the window's context current
+glfw.make_context_current(window)
 
-    # The callback function for keyboard controls
-    glutSpecialFunc(cube.special)
-
-    # Start the main loop
-    glutMainLoop()
-
-# Call the main function
-if __name__ == '__main__':
-    main()
+glutInit(sys.argv)
+    
 '''
 #MAKING THE SKYLINE
 top = []
@@ -329,6 +368,9 @@ for tower in towers:
     x.append(tower.x)
     y.append(tower.y)
 end = time.time()
+glfw.destroy_window(window)
+glfw.terminate()
+'''
 print("TIME =", end-start)
 #"Modelling" the city
 ax1.set_xlim(0, xlen)
@@ -339,3 +381,4 @@ ax1.bar3d(x, y, bottom, width, depth, city.top, shade=True)
 ax1.set_title('Shaded')
 
 plt.show()
+'''

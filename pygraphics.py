@@ -1,4 +1,3 @@
-import pygame
 import matplotlib.pyplot as plt
 import numpy as np
 import random
@@ -18,10 +17,16 @@ except:
 #image
 image = 'testimage.png'
 
-asurf = pygame.image.load('testimage.png')
-bitmap = pygame.surfarray.array2d(asurf)
 im = cv2.imread(image)
+im = np.divide(im, 255/2)
+im = np.add(im, -1)
+bestscore = np.sum(np.multiply(im, im))
 start = time.time()
+
+#mode parameters
+depth_test = True
+display = False
+wire = False
 
 #class for tower generation
 class Tower:
@@ -33,18 +38,18 @@ class Tower:
         self.z = z
         self.rotation = rotation
     
-towcount = 200
+towcount = 100
 heightmin = 3
-heightmax = 1200
+heightmax = 600
 widthmin = 0.5
 widthmax = 4
 depthmin = 0.5
-depthmax = 4
+depthmax = 2
 xlen = 600
 zlen = 100
 xmod = 15
 heightmod = 200
-height = xlen * (len(bitmap[0])/len(bitmap)) #setting aspect ratio
+height = xlen * (len(im[0])/len(im)) #setting aspect ratio
 
 #tower generation
 towers = []
@@ -64,23 +69,20 @@ class Cube:
     def __init__(self):
         self.rotate_y = 0.0
         self.rotate_x = 0.0
-        self.viewrotate_y = 0.0
-        self.viewrotate_x = 0.0
         self.width = 1.0
         self.height = 2.0
         self.depth = 1.0
         self.pos_x = 5.0
         self.pos_z = 0.0
-        self.pos_y = 0.5
         self.zoom = 0.2
-        self.aspect = len(bitmap[0])/len(bitmap)
+        self.aspect = len(im[0])/len(im)
         self.eye = glm.vec3(0.0, 3.0, 5.0)
         self.def_eye = self.eye
         self.center = glm.vec3(0.0, -1.0, 0.0)
         self.def_center = self.center
         self.up = glm.vec3(0.0, 1.0, 0.0)
-        x = glm.cross(self.up, self.eye)
-        y = glm.cross(self.eye, x)
+        x = glm.cross(self.up, self.eye-self.center)
+        y = glm.cross(self.eye-self.center, x)
         self.up = glm.normalize(y)
         self.def_up = self.up
 
@@ -91,8 +93,12 @@ class Cube:
 
         # Set the shade model to flat
         glShadeModel(GL_FLAT)
-        glEnable(GL_DEPTH_TEST)
-        glDepthFunc(GL_LESS)
+
+        if depth_test == True:
+            #Depth testing
+            glEnable(GL_DEPTH_TEST)
+            glDepthFunc(GL_LESS)
+        
 
     # Draw cube
     def draw(self):
@@ -101,19 +107,22 @@ class Cube:
         glLoadIdentity()
 
         # Set the camera
-        gluLookAt(self.eye[0], self.eye[1], self.eye[2], 0.0, self.center[1], 0.0, self.up[0], self.up[1], self.up[2])
+        gluLookAt(self.eye[0], self.eye[1], self.eye[2], self.center[0], self.center[1], self.center[0], self.up[0], self.up[1], self.up[2])
         glScalef(self.zoom, self.zoom, self.zoom)
         # Draw solid cube
         for tower in towers:
             #object transforms
             glPushMatrix()
             glColor3f(1.0, 1.0, 1.0)
-            glRotatef(tower.rotation, 1.0, 0.0, 0.0)
-            glTranslatef(tower.x, self.pos_y*tower.height, tower.z)
+            glRotatef(tower.rotation, 0.0, 1.0, 0.0)
+            glTranslatef(tower.x, 0.0, tower.z)
             glScalef(tower.width, tower.height, tower.depth)
+            glTranslatef(0.5, 0.5, 0.5)
             glutSolidCube(1.0)
-            glColor3f(1.0, 0.0, 0.0)
-            glutWireCube(1.0)
+            if wire:
+                glColor3f(1.0, 0.0, 0.0)
+                glScalef(1.01, 1.01, 1.01)
+                glutWireCube(1.0)
             glPopMatrix()
             
 
@@ -137,13 +146,13 @@ class Cube:
 
     def rotate_left(self, degree):
         rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(self.up))
-        self.eye = rot * (self.eye-self.center) + self.center
+        self.eye = rot * (self.eye)
     
     def rotate_up(self, degree):
         axis = glm.cross(self.eye, self.up)
         rot = glm.rotate(glm.mat4(1.0), degree, glm.normalize(axis))
         self.up = rot * self.up
-        self.eye = rot * (self.eye-self.center) + self.center      
+        self.eye = rot * (self.eye)  
 
     # The keyboard controls
     def special(self, key, x, y):
@@ -184,7 +193,7 @@ def main():
 
         # Set size and position of window size
         glutInitWindowSize(d_width, d_height)
-        glutInitWindowPosition(0, 10)
+        glutInitWindowPosition(0, 0)
 
         # Create window with given title
         glutCreateWindow("Cube")
@@ -234,13 +243,17 @@ def main():
         image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
         imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
         imagearr = np.flip(imagearr, 0)
+        im2 = np.divide(imagearr, 255/2)
+        im2 = np.add(im2, -1)
+        score = np.sum(np.multiply(im, im2))
+        print(score)
+        print(score/bestscore)
 
         cv2.imwrite(r"testresult.png", imagearr)
 
         glfw.destroy_window(window)
         glfw.terminate()
-    
-display = True
+
 # Call the main function
 if __name__ == '__main__':
     main()
