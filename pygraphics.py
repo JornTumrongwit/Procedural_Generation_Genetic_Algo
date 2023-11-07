@@ -91,12 +91,11 @@ class Cube:
 
         # Set the shade model to flat
         glShadeModel(GL_FLAT)
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LESS)
 
     # Draw cube
     def draw(self):
-
-        # Set the color to white
-        glColor3f(1.0, 1.0, 1.0)
 
         # Reset the matrix
         glLoadIdentity()
@@ -108,10 +107,13 @@ class Cube:
         for tower in towers:
             #object transforms
             glPushMatrix()
+            glColor3f(1.0, 1.0, 1.0)
             glRotatef(tower.rotation, 1.0, 0.0, 0.0)
             glTranslatef(tower.x, self.pos_y*tower.height, tower.z)
             glScalef(tower.width, tower.height, tower.depth)
             glutSolidCube(1.0)
+            glColor3f(1.0, 0.0, 0.0)
+            glutWireCube(1.0)
             glPopMatrix()
             
 
@@ -119,7 +121,7 @@ class Cube:
 
     # The display function
     def display(self):
-        glClear(GL_COLOR_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Draw cube
         self.draw()
