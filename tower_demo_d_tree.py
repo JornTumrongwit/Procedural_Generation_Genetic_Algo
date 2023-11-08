@@ -64,8 +64,11 @@ heightmod = 50
 #Node structure: Type, parent offset, parameters, child offsets
 #The tree
 class Tree:
-    def __init__(self, d_tree, diag_slot, straight_slot, bld_slot, nodes) -> None:
+    def __init__(self, d_tree, diags, straights, blds, diag_slot, straight_slot, bld_slot, nodes) -> None:
         self.d_tree = d_tree
+        self.diags = diags
+        self.straights = straights
+        self.blds = blds
         self.diag_slot = diag_slot
         self.straight_slot = straight_slot
         self.bld_slot = bld_slot
@@ -76,6 +79,9 @@ class Tree:
             self.diag_slot = 1
             self.straight_slot = 0
             self.bld_slot = 0
+            self.diags = 0
+            self.straights = 0
+            self.blds = 0
             self.nodes = random.randint(0, nodecount)
             self.nodes = random.randint(0, 1000)
             for i in range(self.nodes):
@@ -97,6 +103,7 @@ class Tree:
         self.d_tree.append(next_diagonal)
         self.d_tree.append(next_straight)
         self.d_tree.append(next_bld)
+        self.diags += 1
         self.diag_slot += 1
         self.straight_slot += 1
         self.bld_slot += 1
@@ -115,6 +122,7 @@ class Tree:
         self.d_tree.append(this_direction)
         self.d_tree.append(next_straight)
         self.d_tree.append(next_bld)
+        self.straights += 1
         self.straight_slot += 1
         self.bld_slot += 1
 
@@ -143,6 +151,7 @@ class Tree:
         self.d_tree.append(this_width)
         self.d_tree.append(this_depth)
         self.d_tree.append(this_height)
+        self.blds += 1
 
     #Growing
     def grow(self) -> None:
@@ -214,16 +223,89 @@ class Tree:
         #in the VERY LOW CHANCE that for some reason the randomizer hits that perfect decimal 
         #inaccuracy from 100 just say it's a dud mutation
     
+    #alter
+    def alter(self) -> None:
+        diag = self.diags
+        straight = self.straights + diag
+        blds = self.blds + straight
+        rng = random.randint(0, blds)
+        candidate = []
+        i = 5
+        if rng <= diag:
+            '''
+            this_distance = random.uniform(0, diagonal_distance)/unit_mod
+            this_angle = random.uniform(0, 2*math.pi)
+            '''
+            while i < len(self.d_tree):
+                if type(self.d_tree[i]) == Node:
+                    match self.d_tree[i]:
+                        case Node.Diagonal:
+                            candidate.append(i)
+                            i += 7
+                        case Node.Straight:
+                            i += 6
+                        case Node.Building:
+                            i += 6
+            index = random.choice(candidate)
+            self.d_tree[index+2] = random.uniform(0, diagonal_distance)/unit_mod
+            self.d_tree[index+3] = random.uniform(0, 2*math.pi)
+
+        elif rng <= straight:
+            '''
+            this_distance = random.uniform(-straight_distance, straight_distance)/unit_mod
+            this_direction = random.choice(list(Direction))
+            '''
+            while i < len(self.d_tree):
+                if type(self.d_tree[i]) == Node:
+                    match self.d_tree[i]:
+                        case Node.Diagonal:
+                            i += 7
+                        case Node.Straight:
+                            candidate.append(i)
+                            i += 6
+                        case Node.Building:
+                            i += 6
+            index = random.choice(candidate)
+            self.d_tree[index+2] = random.uniform(-straight_distance, straight_distance)/unit_mod
+            self.d_tree[index+3] = random.choice(list(Direction))
+            
+        else:
+            '''
+            this_rotation = random.uniform(0, 360)
+            this_width = random.uniform(widthmin, widthmax)
+            this_depth = random.uniform(depthmin, depthmax)*this_width
+            this_height = random.uniform(heightmin/heightmod, heightmax/heightmod)
+            '''
+            while i < len(self.d_tree):
+                if type(self.d_tree[i]) == Node:
+                    match self.d_tree[i]:
+                        case Node.Diagonal:
+                            i += 7
+                        case Node.Straight:
+                            i += 6
+                        case Node.Building:
+                            candidate.append(i)
+                            i += 6
+            index = random.choice(candidate)
+            self.d_tree[index+2] = random.uniform(0, 360)
+            self.d_tree[index+3] = random.uniform(widthmin, widthmax)
+            self.d_tree[index+4] = random.uniform(depthmin, depthmax)*self.d_tree[index+3]
+            self.d_tree[index+5] = random.uniform(heightmin/heightmod, heightmax/heightmod)
+
+    #copying, useful for child
     def copy(self) -> None:
         d_tree = self.d_tree.copy()
-        diag_slot = self.diag_slot
-        straight_slot = self.diag_slot
-        bld_slot = self.bld_slot
-        nodes = self.nodes
-        return Tree(d_tree, diag_slot, straight_slot, bld_slot, nodes)
+        return Tree(d_tree,
+                    self.diags, self.straights, self.blds, 
+                    self.diag_slot, self.straight_slot, self.bld_slot, 
+                    self.nodes)
     
-test_tree = Tree(None, None, None, None, None)
+test_tree = Tree(None, None, None, None, None, None, None, None)
 print(f"NODES: {test_tree.nodes}")
+#testing
+alters = 30
+for i in range(alters):
+    test_tree.alter()
 #class for tower generation
 class Tower:
     def __init__(self, height, width, depth, x, z, rotation) -> None:
@@ -241,15 +323,6 @@ def traverse_tree(tree, index, x, z):
     result = []
     match tree.d_tree[index]:
         case Node.Diagonal:
-            '''
-            self.d_tree.append(Node.Diagonal)
-            self.d_tree.append(-offset)
-            self.d_tree.append(this_distance)
-            self.d_tree.append(this_angle)
-            self.d_tree.append(next_diagonal)
-            self.d_tree.append(next_straight)
-            self.d_tree.append(next_bld)
-            '''
             if tree.d_tree[index+4] is not None:
                 result += traverse_tree(tree, index + tree.d_tree[index+4], x, z)
             if tree.d_tree[index+5] is not None:
@@ -262,14 +335,6 @@ def traverse_tree(tree, index, x, z):
                                         z + (tree.d_tree[index+2] * math.cos(tree.d_tree[index+3])))
             return result
         case Node.Straight:
-            '''
-            self.d_tree.append(Node.Straight)
-            self.d_tree.append(-offset)
-            self.d_tree.append(this_distance)
-            self.d_tree.append(this_direction)
-            self.d_tree.append(next_straight)
-            self.d_tree.append(next_bld)
-            '''
             match tree.d_tree[index+3]:
                 case Direction.X:
                     x += tree.d_tree[index+2]
@@ -281,14 +346,6 @@ def traverse_tree(tree, index, x, z):
                 result += traverse_tree(tree, index + tree.d_tree[index+5], x, z)
             return result
         case Node.Building:
-            '''
-            self.d_tree.append(Node.Building)
-            self.d_tree.append(-offset)
-            self.d_tree.append(this_rotation)
-            self.d_tree.append(this_width)
-            self.d_tree.append(this_depth)
-            self.d_tree.append(this_height)
-            '''
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
                           tree.d_tree[index+4], x, z*expandedness, tree.d_tree[index+2])]
 
