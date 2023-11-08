@@ -198,6 +198,7 @@ def render_And_Score(towers):
     im2 = np.divide(imagearr, 255/2)
     im2 = np.add(im2, -1)
     score = np.sum(np.multiply(im, im2))
+    cv2.imwrite(r"testresult.png", imagearr)
     return score/bestscore
 
 # Initialize the library
