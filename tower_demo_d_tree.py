@@ -83,7 +83,6 @@ class Tree:
             self.straights = 0
             self.blds = 0
             self.nodes = random.randint(0, nodecount)
-            self.nodes = random.randint(0, 1000)
             for i in range(self.nodes):
                 self.grow()
 
@@ -232,10 +231,6 @@ class Tree:
         candidate = []
         i = 5
         if rng <= diag:
-            '''
-            this_distance = random.uniform(0, diagonal_distance)/unit_mod
-            this_angle = random.uniform(0, 2*math.pi)
-            '''
             while i < len(self.d_tree):
                 if type(self.d_tree[i]) == Node:
                     match self.d_tree[i]:
@@ -246,15 +241,13 @@ class Tree:
                             i += 6
                         case Node.Building:
                             i += 6
+                        case _:
+                            raise Exception("NOT A NODE")
             index = random.choice(candidate)
             self.d_tree[index+2] = random.uniform(0, diagonal_distance)/unit_mod
             self.d_tree[index+3] = random.uniform(0, 2*math.pi)
 
         elif rng <= straight:
-            '''
-            this_distance = random.uniform(-straight_distance, straight_distance)/unit_mod
-            this_direction = random.choice(list(Direction))
-            '''
             while i < len(self.d_tree):
                 if type(self.d_tree[i]) == Node:
                     match self.d_tree[i]:
@@ -265,17 +258,14 @@ class Tree:
                             i += 6
                         case Node.Building:
                             i += 6
+                        case _:
+                            raise Exception("NOT A NODE")
+                    
             index = random.choice(candidate)
             self.d_tree[index+2] = random.uniform(-straight_distance, straight_distance)/unit_mod
             self.d_tree[index+3] = random.choice(list(Direction))
             
         else:
-            '''
-            this_rotation = random.uniform(0, 360)
-            this_width = random.uniform(widthmin, widthmax)
-            this_depth = random.uniform(depthmin, depthmax)*this_width
-            this_height = random.uniform(heightmin/heightmod, heightmax/heightmod)
-            '''
             while i < len(self.d_tree):
                 if type(self.d_tree[i]) == Node:
                     match self.d_tree[i]:
@@ -286,11 +276,168 @@ class Tree:
                         case Node.Building:
                             candidate.append(i)
                             i += 6
+                        case _:
+                            raise Exception("NOT A NODE")
             index = random.choice(candidate)
             self.d_tree[index+2] = random.uniform(0, 360)
             self.d_tree[index+3] = random.uniform(widthmin, widthmax)
             self.d_tree[index+4] = random.uniform(depthmin, depthmax)*self.d_tree[index+3]
             self.d_tree[index+5] = random.uniform(heightmin/heightmod, heightmax/heightmod)
+    
+    def remove_branch(self, index) -> None:
+        if index == 5:
+            return #please don't just completely disappear
+        slices = [(0, index)] #array of indices for each individual slices
+        removal = set() #array of indices to remove
+        removal.add(index)
+        tail = 0
+        removed = 0
+        parent = [0] * len(self.d_tree)
+        while index < len(self.d_tree):
+            if index not in removal:
+                #Not removing, adjust the offsets
+                #Change parent's offset, and change child's offset
+                parent_ind = self.d_tree[index + 1] + index
+                parent_removed = parent[parent_ind]
+                end_offset = self.d_tree[index + 1] + removed - parent_removed
+                parent[index] = removed
+                self.d_tree[index + 1] = end_offset
+                match self.d_tree[index]:
+                    case Node.Diagonal:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+4] = -end_offset
+                            case Node.Center:
+                                self.d_tree[parent_ind+4] = -end_offset
+                        index += 7
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+                    case Node.Straight:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+5] = -end_offset
+                            case Node.Straight:
+                                self.d_tree[parent_ind+4] = -end_offset
+                        index += 6
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+                    case Node.Building:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+6] = -end_offset
+                            case Node.Straight:
+                                self.d_tree[parent_ind+5] = -end_offset
+                        index += 6
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+            else:
+                #remove this item
+                removal.remove(index)
+                self.nodes -= 1
+                parent_ind = self.d_tree[index + 1] + index
+                match self.d_tree[index]:
+                    case Node.Diagonal:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+4] = None
+                            case Node.Center:
+                                self.d_tree[parent_ind+4] = None
+                        self.diags -= 1
+                        self.diag_slot += 1
+                        if self.d_tree[index+4] is not None:
+                            removal.add(self.d_tree[index+4] + index)
+                        if self.d_tree[index+5] is not None:
+                            removal.add(self.d_tree[index+5] + index)
+                        if self.d_tree[index+6] is not None:
+                            removal.add(self.d_tree[index+6] + index)
+                        index += 7
+                        removed += 7
+                        tail = index
+                        slices.append((tail, tail))
+                    case Node.Straight:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+5] = None
+                            case Node.Straight:
+                                self.d_tree[parent_ind+4] = None
+                        self.straights -=1
+                        self.straight_slot += 1
+                        if self.d_tree[index+4] is not None:
+                            removal.add(self.d_tree[index+4] + index)
+                        if self.d_tree[index+5] is not None:
+                            removal.add(self.d_tree[index+5] + index)
+                        index += 6
+                        removed += 6
+                        tail = index
+                        slices.append((tail, tail))
+                    case Node.Building:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+6] = None
+                            case Node.Straight:
+                                self.d_tree[parent_ind+5] = None
+                        self.blds -=1
+                        self.bld_slot += 1
+                        index += 6
+                        removed += 6
+                        tail = index
+                        slices.append((tail, tail))
+        result = []
+        for slice in slices:
+            result += self.d_tree[slice[0]: slice[1]]
+        self.d_tree = result
+
+    #PAIN
+    def cut(self) -> None:
+        prob_d = (1-p_diagonal)*self.diags
+        prob_s = (1-p_straight)*self.straights
+        prob_b = (1-p_building)*self.blds
+        totalprob = prob_d + prob_s + prob_b
+        num_b = prob_b/totalprob
+        num_s = prob_s/totalprob + num_b
+        num_d = prob_d/totalprob + num_s
+        choice = random.uniform(0, 1)
+        candidates = []
+        index = 0
+        #choose
+        if choice < num_b:
+            while index < len(self.d_tree):
+                if self.d_tree[index] == Node.Center:
+                    index += 5
+                elif self.d_tree[index] == Node.Building:
+                    candidates.append(index)
+                    index += 6
+                elif self.d_tree[index] == Node.Diagonal:
+                    index += 7
+                elif self.d_tree[index] == Node.Straight:
+                    index += 6
+            pick = random.choice(candidates)
+            self.remove_branch(pick)
+
+        elif choice < num_s:
+            while index < len(self.d_tree):
+                if self.d_tree[index] == Node.Center:
+                    index += 5
+                elif self.d_tree[index] == Node.Building:
+                    index += 6
+                elif self.d_tree[index] == Node.Diagonal:
+                    index += 7
+                elif self.d_tree[index] == Node.Straight:
+                    candidates.append(index)
+                    index += 6
+            pick = random.choice(candidates)
+            self.remove_branch(pick)
+
+        elif choice < num_d:
+            while index < len(self.d_tree):
+                if self.d_tree[index] == Node.Center:
+                    index += 5
+                elif self.d_tree[index] == Node.Building:
+                    index += 6
+                elif self.d_tree[index] == Node.Diagonal:
+                    candidates.append(index)
+                    index += 7
+                elif self.d_tree[index] == Node.Straight:
+                    index += 6
+            pick = random.choice(candidates)
+            self.remove_branch(pick)
 
     #copying, useful for child
     def copy(self) -> None:
@@ -301,11 +448,15 @@ class Tree:
                     self.nodes)
     
 test_tree = Tree(None, None, None, None, None, None, None, None)
-print(f"NODES: {test_tree.nodes}")
+test_tree.cut()
 #testing
 alters = 30
 for i in range(alters):
     test_tree.alter()
+grow = 10
+for i in range(grow):
+    test_tree.grow()
+print(f"NODES: {test_tree.nodes}")
 #class for tower generation
 class Tower:
     def __init__(self, height, width, depth, x, z, rotation) -> None:
@@ -536,8 +687,6 @@ def main():
         im2 = np.divide(imagearr, 255/2)
         im2 = np.add(im2, -1)
         score = np.sum(np.multiply(im, im2))
-        print(score)
-        print(score/bestscore)
 
         cv2.imwrite(r"testresult.png", imagearr)
 
