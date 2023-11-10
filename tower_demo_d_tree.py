@@ -64,16 +64,8 @@ heightmod = 50
 #Node structure: Type, parent offset, parameters, child offsets
 #The tree
 class Tree:
-    def __init__(self, d_tree, diags, straights, blds, diag_slot, straight_slot, bld_slot, nodes) -> None:
-        self.d_tree = d_tree
-        self.diags = diags
-        self.straights = straights
-        self.blds = blds
-        self.diag_slot = diag_slot
-        self.straight_slot = straight_slot
-        self.bld_slot = bld_slot
-        self.nodes = nodes
-        if d_tree == None:
+    def __init__(self, origin) -> None:
+        if origin == None:
             self.d_tree = []
             self.center()
             self.diag_slot = 1
@@ -82,9 +74,20 @@ class Tree:
             self.diags = 0
             self.straights = 0
             self.blds = 0
-            self.nodes = random.randint(0, nodecount)
-            for i in range(self.nodes):
+            self.nodes = 0
+            #create = random.randint(0, nodecount)
+            create = 10
+            for i in range(create):
                 self.grow()
+        else:
+            self.d_tree = origin.d_tree.copy()
+            self.diags = origin.diags
+            self.straights = origin.straights
+            self.blds = origin.blds
+            self.diag_slot = origin.diag_slot
+            self.straight_slot = origin.straight_slot
+            self.bld_slot = origin.bld_slot
+            self.nodes = origin.nodes
 
     #offset = 7
     def diagonal(self, slot_ind, par_ind) -> None:
@@ -164,6 +167,7 @@ class Tree:
         choice = random.uniform(0, 1)
         candidates = []
         index = 0
+        self.nodes += 1
         #generate
         if choice < num_b:
             while index < len(self.d_tree):
@@ -340,13 +344,18 @@ class Tree:
                             case Node.Center:
                                 self.d_tree[parent_ind+4] = None
                         self.diags -= 1
-                        self.diag_slot += 1
                         if self.d_tree[index+4] is not None:
                             removal.add(self.d_tree[index+4] + index)
+                        else:
+                            self.diag_slot -= 1
                         if self.d_tree[index+5] is not None:
                             removal.add(self.d_tree[index+5] + index)
+                        else:
+                            self.straight_slot -= 1
                         if self.d_tree[index+6] is not None:
                             removal.add(self.d_tree[index+6] + index)
+                        else:
+                            self.bld_slot -= 1
                         index += 7
                         removed += 7
                         tail = index
@@ -358,11 +367,14 @@ class Tree:
                             case Node.Straight:
                                 self.d_tree[parent_ind+4] = None
                         self.straights -=1
-                        self.straight_slot += 1
                         if self.d_tree[index+4] is not None:
                             removal.add(self.d_tree[index+4] + index)
+                        else:
+                            self.straight_slot -= 1
                         if self.d_tree[index+5] is not None:
                             removal.add(self.d_tree[index+5] + index)
+                        else:
+                            self.bld_slot -= 1
                         index += 6
                         removed += 6
                         tail = index
@@ -382,7 +394,7 @@ class Tree:
         result = []
         for slice in slices:
             result += self.d_tree[slice[0]: slice[1]]
-        self.d_tree = result
+        self.d_tree = result.copy()
 
     #PAIN
     def cut(self) -> None:
@@ -410,6 +422,7 @@ class Tree:
                     index += 6
             pick = random.choice(candidates)
             self.remove_branch(pick)
+            self.bld_slot += 1
 
         elif choice < num_s:
             while index < len(self.d_tree):
@@ -424,6 +437,7 @@ class Tree:
                     index += 6
             pick = random.choice(candidates)
             self.remove_branch(pick)
+            self.straight_slot += 1
 
         elif choice < num_d:
             while index < len(self.d_tree):
@@ -438,25 +452,264 @@ class Tree:
                     index += 6
             pick = random.choice(candidates)
             self.remove_branch(pick)
+            self.diag_slot += 1
 
-    #copying, useful for child
-    def copy(self) -> None:
-        d_tree = self.d_tree.copy()
-        return Tree(d_tree,
-                    self.diags, self.straights, self.blds, 
-                    self.diag_slot, self.straight_slot, self.bld_slot, 
-                    self.nodes)
+    #A different remove can result in an extract, takes in index of the child to cut, and the parent's slot
+    def extract(self, index, slot) -> list:
+        match self.d_tree[index]:
+            case Node.Diagonal:
+                self.diag_slot += 1
+            case Node.Straight:
+                self.straight_slot += 1
+        extractlst = []
+        slices = [(0, index)] #array of indices for each individual slices
+        removal = set() #array of indices to remove
+        removal.add(index)
+        tail = 0
+        removed = 0
+        parent = [0] * len(self.d_tree)
+        self.d_tree[slot] = None
+        while index < len(self.d_tree):
+            if index not in removal:
+                #Not removing, adjust the offsets
+                #Change parent's offset, and change child's offset
+                parent_ind = self.d_tree[index + 1] + index
+                parent_removed = parent[parent_ind]
+                end_offset = self.d_tree[index + 1] + removed - parent_removed
+                parent[index] = removed
+                self.d_tree[index + 1] = end_offset
+                match self.d_tree[index]:
+                    case Node.Diagonal:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+4] = -end_offset
+                            case Node.Center:
+                                self.d_tree[parent_ind+4] = -end_offset
+                        index += 7
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+                    case Node.Straight:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+5] = -end_offset
+                            case Node.Straight:
+                                self.d_tree[parent_ind+4] = -end_offset
+                        index += 6
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+                    case Node.Building:
+                        match self.d_tree[parent_ind]:
+                            case Node.Diagonal:
+                                self.d_tree[parent_ind+6] = -end_offset
+                            case Node.Straight:
+                                self.d_tree[parent_ind+5] = -end_offset
+                        index += 6
+                        slices[len(slices)-1] = (slices[len(slices)-1][0], index)
+            else:
+                #remove this item, add it to the extracted list
+                removal.remove(index)
+                parent[index] = len(extractlst) # the index in the extracted list
+                self.nodes -= 1
+                parent_ind = self.d_tree[index + 1] + index
+                parent_extract = parent[parent_ind]
+                offset = parent_extract - parent[index]
+                match self.d_tree[index]:
+                    case Node.Diagonal:
+                        self.diags -= 1
+                        if self.d_tree[index+4] is not None:
+                            removal.add(self.d_tree[index+4] + index)
+                        else:
+                            self.diag_slot -= 1
+                        if self.d_tree[index+5] is not None:
+                            removal.add(self.d_tree[index+5] + index)
+                        else:
+                            self.straight_slot -= 1
+                        if self.d_tree[index+6] is not None:
+                            removal.add(self.d_tree[index+6] + index)
+                        else:
+                            self.bld_slot -= 1
+                        #Adding stuffs to extracted list
+                        item_ind = len(extractlst)
+                        extractlst += self.d_tree[index:index+7]
+                        if item_ind > 0:
+                            extractlst[item_ind+1] = offset
+                            match self.d_tree[parent_ind]:
+                                case Node.Diagonal:
+                                    extractlst[parent_extract+4] = -offset
+                                case Node.Center:
+                                    extractlst[parent_extract+4] = -offset
+                        else:
+                            extractlst[1] = 0
+                        index += 7
+                        removed += 7
+                        tail = index
+                        slices.append((tail, tail))
+                    case Node.Straight:
+                        self.straights -=1
+                        if self.d_tree[index+4] is not None:
+                            removal.add(self.d_tree[index+4] + index)
+                        else:
+                            self.straight_slot -= 1
+                        if self.d_tree[index+5] is not None:
+                            removal.add(self.d_tree[index+5] + index)
+                        else:
+                            self.bld_slot -= 1
+                        #Adding stuffs to extracted list
+                        item_ind = len(extractlst)
+                        extractlst += self.d_tree[index:index+6]
+                        if item_ind > 0:
+                            extractlst[item_ind+1] = offset
+                            match self.d_tree[parent_ind]:
+                                case Node.Diagonal:
+                                    extractlst[parent_extract+5] = -offset
+                                case Node.Straight:
+                                    extractlst[parent_extract+4] = -offset
+                        else:
+                            extractlst[1] = 0
+                        index += 6
+                        removed += 6
+                        tail = index
+                        slices.append((tail, tail))
+                    case Node.Building:
+                        self.blds -=1
+                        #Adding stuffs to extracted list
+                        item_ind = len(extractlst)
+                        extractlst += self.d_tree[index:index+6]
+                        if item_ind > 0:
+                            extractlst[item_ind+1] = offset
+                            match self.d_tree[parent_ind]:
+                                case Node.Diagonal:
+                                    extractlst[parent_extract+6] = -offset
+                                case Node.Straight:
+                                    extractlst[parent_extract+5] = -offset
+                        else:
+                            extractlst[1] = 0
+                        index += 6
+                        removed += 6
+                        tail = index
+                        slices.append((tail, tail))
+        result = []
+        for slice in slices:
+            result += self.d_tree[slice[0]: slice[1]]
+        self.d_tree = result.copy()
+        return extractlst
     
-test_tree = Tree(None, None, None, None, None, None, None, None)
-test_tree.cut()
+    #returns: index of child to cut, parent's slot, type of parent, type of slot
+    def random_crosspoint(self) -> (int, int, Node, Node):
+        candidates = []
+        index = 0
+        while index < len(self.d_tree):
+            match self.d_tree[index]:
+                case Node.Center:
+                    index += 5
+                case Node.Diagonal:
+                    if self.d_tree[index+4] is not None:
+                        candidates.append((index + self.d_tree[index+4], index+4, 
+                                           Node.Diagonal, Node.Diagonal))
+                    if self.d_tree[index+5] is not None:
+                        candidates.append((index + self.d_tree[index+5], index+5, 
+                                           Node.Diagonal, Node.Straight))
+                    if self.d_tree[index+6] is not None:
+                        candidates.append((index + self.d_tree[index+6], index+6, 
+                                           Node.Diagonal, Node.Building))
+                    index += 7
+                case Node.Straight:
+                    if self.d_tree[index+4] is not None:
+                        candidates.append((index + self.d_tree[index+4], index+4, 
+                                           Node.Straight, Node.Straight))
+                    if self.d_tree[index+5] is not None:
+                        candidates.append((index + self.d_tree[index+5], index+5, 
+                                           Node.Straight, Node.Building))
+                    index += 6
+                case Node.Building:
+                    index += 6
+        return random.choice(candidates)
+
+    def pick_crosspoint(self, nodetype, connectType) -> (int, int):
+        candidate = []
+        index = 0
+        match nodetype:
+            case Node.Diagonal:
+                while index < len(self.d_tree):
+                    match self.d_tree[index]:
+                        case Node.Center:
+                            index += 5
+                        case Node.Diagonal:
+                            match connectType:
+                                case Node.Diagonal:
+                                    if self.d_tree[index+4] is not None:
+                                        candidate.append((index+self.d_tree[index+4], index + 4))
+                                case Node.Straight:
+                                    if self.d_tree[index+5] is not None:
+                                        candidate.append((index+self.d_tree[index+5], index + 5))
+                                case Node.Building:
+                                    if self.d_tree[index+6] is not None:
+                                        candidate.append((index+self.d_tree[index+6], index + 6))
+                            index += 7
+                        case Node.Straight:
+                            index += 6
+                        case Node.Building:
+                            index += 6
+
+            case Node.Straight:
+                while index < len(self.d_tree):
+                    match self.d_tree[index]:
+                        case Node.Center:
+                            index += 5
+                        case Node.Diagonal:
+                            index += 7
+                        case Node.Straight:
+                            match connectType:
+                                case Node.Straight:
+                                    if self.d_tree[index+4] is not None:
+                                        candidate.append((index+self.d_tree[index+4], index + 4))
+                                case Node.Building:
+                                    if self.d_tree[index+5] is not None:
+                                        candidate.append((index+self.d_tree[index+5], index + 5))
+                            index += 6
+                        case Node.Building:
+                            index += 6
+        if len(candidate) == 0:
+            return None
+        else:
+            return random.choice(candidate)
+
+test_tree = Tree(None)
+test_tree2 = Tree(None)
+print(f"NODES: {test_tree.nodes}")
+
 #testing
+test_tree.cut()
+'''
 alters = 30
 for i in range(alters):
     test_tree.alter()
 grow = 10
 for i in range(grow):
     test_tree.grow()
-print(f"NODES: {test_tree.nodes}")
+    '''
+print("---------------------TREE:", test_tree.nodes, test_tree.diags, test_tree.straights, test_tree.blds,
+      test_tree.diag_slot, test_tree.straight_slot, test_tree.bld_slot)
+for item in test_tree.d_tree:
+    print(item)
+test_child = Tree(test_tree)
+test_child2 = Tree(test_tree2)
+index, slot, nodetype, connecttype = test_tree.random_crosspoint()
+print(index, slot, nodetype, connecttype)
+index2, slot2 = test_tree2.pick_crosspoint(nodetype, connecttype)
+print(index2, slot2)
+print("-----------------------OG CHILD:", test_child.nodes, test_child.diags, test_child.straights, test_child.blds,
+      test_child.diag_slot, test_child.straight_slot, test_child.bld_slot)
+for item in test_child.d_tree:
+    print(item)
+test_branch = test_child.extract(index, slot)
+print("-----------------------CHILD:", test_child.nodes, test_child.diags, test_child.straights, test_child.blds,
+      test_child.diag_slot, test_child.straight_slot, test_child.bld_slot)
+for item in test_child.d_tree:
+    print(item)
+print("---------------------BRANCH")
+for item in test_branch:
+    print(item)
+
+
 #class for tower generation
 class Tower:
     def __init__(self, height, width, depth, x, z, rotation) -> None:

@@ -51,7 +51,7 @@ def generate_tower():
     height = random.uniform(heightmin/50, heightmax/50)
     width = random.uniform(widthmin, widthmax)
     depth = random.uniform(depthmin, depthmax)*width
-    rotation = random.uniform(0, 2*math.pi)
+    rotation = random.uniform(0, 360)
     return Tower(height, width, depth, x, z, rotation)
 
 tower_amt = 30
@@ -77,6 +77,7 @@ popsize = 180
 elitism = 0.2
 k_tournament = 10
 
+result = []
 d_width = len(im[0])
 d_height = len(im)
 # The cube class
@@ -93,7 +94,7 @@ class Cube:
         self.pos_z = 0.0
         self.zoom = 0.2
         self.aspect = len(im[0])/len(im)
-        self.eye = glm.vec3(0.0, 3.0, 5.0)
+        self.eye = glm.vec3(0.0, 6.0, 5.0)
         self.def_eye = self.eye
         self.center = glm.vec3(0.0, 0.0, 0.0)
         self.def_center = self.center
@@ -126,8 +127,8 @@ class Cube:
             #object transforms
             glPushMatrix()
             glColor3f(1.0, 1.0, 1.0)
-            glRotatef(tower.rotation, 0.0, 1.0, 0.0)
             glTranslatef(tower.x, 0.0, tower.z)
+            glRotatef(tower.rotation, 0.0, 1.0, 0.0)
             glScalef(tower.width, tower.height, tower.depth)
             glTranslatef(0.5, 0.5, 0.5)
             glutSolidCube(1.0)
@@ -142,6 +143,9 @@ class Cube:
 
         # Draw cube
         self.draw(towers)
+
+    def displayresult(self):
+        self.display(result)
 
     # The reshape function
     def reshape(self, w, h):
@@ -305,7 +309,6 @@ for gen in range(generations):
         #get parents
         par1 = roulette_selection(towns)
         par2 = tournament(towns)
-        print("PARENT:", par1.score, ",", par2.score)
         #crossover
         cut_parent_1 = random.randint(0, len(par1.towers)-1)
         cut_parent_2 = random.randint(0, len(par2.towers)-1)
@@ -316,7 +319,6 @@ for gen in range(generations):
         child2.towers = mutate(child2.towers)
         child1.score = render_And_Score(child1.towers)
         child2.score = render_And_Score(child2.towers)
-        print("Children,", child1.score, ",", child2.score)
         towns.append(child1)
         towns.append(child2)
     
@@ -334,4 +336,36 @@ town = towns[0]
 print("BEST SCORE:", town.score)
 for tower in town.towers:
     f.write(f"{tower.height} {tower.width} {tower.depth} {tower.x} {tower.z} {tower.rotation}\n")
+
+result = town.towers
+# Initialize OpenGL
+glutInit(sys.argv)
+
+# Set display mode
+glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
+
+# Set size and position of window size
+glutInitWindowSize(d_width, d_height)
+glutInitWindowPosition(0, 0)
+
+# Create window with given title
+glutCreateWindow("Cube")
+
+# Instantiate the cube
+cube = Cube()
+
+cube.init()
+
+# The callback for display function
+glutDisplayFunc(cube.displayresult)
+
+# The callback for reshape function
+glutReshapeFunc(cube.reshape)
+
+# The callback function for keyboard controls
+glutSpecialFunc(cube.special)
+
+# The callback function for normal keyboard controls
+glutKeyboardFunc(cube.keyb)
+glutMainLoop()
 f.close()
