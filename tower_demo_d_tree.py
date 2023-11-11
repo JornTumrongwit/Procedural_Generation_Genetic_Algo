@@ -52,6 +52,16 @@ class Node(Enum):
     Straight = 2 #distance, direction
     Building = 3 #rotation, width, depth, height
 
+class Branch:
+    def __init__(self, branch, nodes, diag_slot, straight_slot, bld_slot, diags, straights, blds):
+        self.branch = branch.copy()
+        self.diags = diags
+        self.straights = straights
+        self.blds = blds
+        self.diag_slot = diag_slot
+        self.straight_slot = straight_slot
+        self.bld_slot = bld_slot
+        self.nodes = nodes
 #Tower parameters
 heightmin = 3
 heightmax = 600
@@ -75,8 +85,7 @@ class Tree:
             self.straights = 0
             self.blds = 0
             self.nodes = 0
-            #create = random.randint(0, nodecount)
-            create = 10
+            create = random.randint(0, nodecount)
             for i in range(create):
                 self.grow()
         else:
@@ -455,7 +464,14 @@ class Tree:
             self.diag_slot += 1
 
     #A different remove can result in an extract, takes in index of the child to cut, and the parent's slot
-    def extract(self, index, slot) -> list:
+    def extract(self, index, slot) -> Branch:
+        b_diags = 0
+        b_straights = 0
+        b_blds = 0
+        b_diag_slot = 0
+        b_straight_slot = 0
+        b_bld_slot = 0
+        b_nodes = 0
         match self.d_tree[index]:
             case Node.Diagonal:
                 self.diag_slot += 1
@@ -505,6 +521,7 @@ class Tree:
                         slices[len(slices)-1] = (slices[len(slices)-1][0], index)
             else:
                 #remove this item, add it to the extracted list
+                b_nodes += 1
                 removal.remove(index)
                 parent[index] = len(extractlst) # the index in the extracted list
                 self.nodes -= 1
@@ -513,19 +530,23 @@ class Tree:
                 offset = parent_extract - parent[index]
                 match self.d_tree[index]:
                     case Node.Diagonal:
+                        b_diags += 1
                         self.diags -= 1
                         if self.d_tree[index+4] is not None:
                             removal.add(self.d_tree[index+4] + index)
                         else:
                             self.diag_slot -= 1
+                            b_diag_slot += 1
                         if self.d_tree[index+5] is not None:
                             removal.add(self.d_tree[index+5] + index)
                         else:
                             self.straight_slot -= 1
+                            b_straight_slot += 1
                         if self.d_tree[index+6] is not None:
                             removal.add(self.d_tree[index+6] + index)
                         else:
                             self.bld_slot -= 1
+                            b_bld_slot += 1
                         #Adding stuffs to extracted list
                         item_ind = len(extractlst)
                         extractlst += self.d_tree[index:index+7]
@@ -544,14 +565,17 @@ class Tree:
                         slices.append((tail, tail))
                     case Node.Straight:
                         self.straights -=1
+                        b_straights += 1
                         if self.d_tree[index+4] is not None:
                             removal.add(self.d_tree[index+4] + index)
                         else:
                             self.straight_slot -= 1
+                            b_straight_slot += 1
                         if self.d_tree[index+5] is not None:
                             removal.add(self.d_tree[index+5] + index)
                         else:
                             self.bld_slot -= 1
+                            b_bld_slot += 1
                         #Adding stuffs to extracted list
                         item_ind = len(extractlst)
                         extractlst += self.d_tree[index:index+6]
@@ -570,6 +594,7 @@ class Tree:
                         slices.append((tail, tail))
                     case Node.Building:
                         self.blds -=1
+                        b_blds += 1
                         #Adding stuffs to extracted list
                         item_ind = len(extractlst)
                         extractlst += self.d_tree[index:index+6]
@@ -590,9 +615,10 @@ class Tree:
         for slice in slices:
             result += self.d_tree[slice[0]: slice[1]]
         self.d_tree = result.copy()
-        return extractlst
+        return Branch(extractlst, b_nodes, b_diag_slot, b_straight_slot,
+                      b_bld_slot, b_diags, b_straights, b_blds)
     
-    #returns: index of child to cut, parent's slot, type of parent, type of slot
+    #returns: index of child to cut, parent's slot, index of parent, type of parent, type of slot
     def random_crosspoint(self) -> (int, int, Node, Node):
         candidates = []
         index = 0
@@ -602,28 +628,28 @@ class Tree:
                     index += 5
                 case Node.Diagonal:
                     if self.d_tree[index+4] is not None:
-                        candidates.append((index + self.d_tree[index+4], index+4, 
+                        candidates.append((index + self.d_tree[index+4], index+4, index,
                                            Node.Diagonal, Node.Diagonal))
                     if self.d_tree[index+5] is not None:
-                        candidates.append((index + self.d_tree[index+5], index+5, 
+                        candidates.append((index + self.d_tree[index+5], index+5, index,
                                            Node.Diagonal, Node.Straight))
                     if self.d_tree[index+6] is not None:
-                        candidates.append((index + self.d_tree[index+6], index+6, 
+                        candidates.append((index + self.d_tree[index+6], index+6, index,
                                            Node.Diagonal, Node.Building))
                     index += 7
                 case Node.Straight:
                     if self.d_tree[index+4] is not None:
-                        candidates.append((index + self.d_tree[index+4], index+4, 
+                        candidates.append((index + self.d_tree[index+4], index+4, index, 
                                            Node.Straight, Node.Straight))
                     if self.d_tree[index+5] is not None:
-                        candidates.append((index + self.d_tree[index+5], index+5, 
+                        candidates.append((index + self.d_tree[index+5], index+5, index, 
                                            Node.Straight, Node.Building))
                     index += 6
                 case Node.Building:
                     index += 6
         return random.choice(candidates)
 
-    def pick_crosspoint(self, nodetype, connectType) -> (int, int):
+    def pick_crosspoint(self, nodetype, connectType) -> (int, int, int):
         candidate = []
         index = 0
         match nodetype:
@@ -636,13 +662,13 @@ class Tree:
                             match connectType:
                                 case Node.Diagonal:
                                     if self.d_tree[index+4] is not None:
-                                        candidate.append((index+self.d_tree[index+4], index + 4))
+                                        candidate.append((index+self.d_tree[index+4], index + 4, index))
                                 case Node.Straight:
                                     if self.d_tree[index+5] is not None:
-                                        candidate.append((index+self.d_tree[index+5], index + 5))
+                                        candidate.append((index+self.d_tree[index+5], index + 5, index))
                                 case Node.Building:
                                     if self.d_tree[index+6] is not None:
-                                        candidate.append((index+self.d_tree[index+6], index + 6))
+                                        candidate.append((index+self.d_tree[index+6], index + 6, index))
                             index += 7
                         case Node.Straight:
                             index += 6
@@ -660,10 +686,10 @@ class Tree:
                             match connectType:
                                 case Node.Straight:
                                     if self.d_tree[index+4] is not None:
-                                        candidate.append((index+self.d_tree[index+4], index + 4))
+                                        candidate.append((index+self.d_tree[index+4], index + 4, index))
                                 case Node.Building:
                                     if self.d_tree[index+5] is not None:
-                                        candidate.append((index+self.d_tree[index+5], index + 5))
+                                        candidate.append((index+self.d_tree[index+5], index + 5, index))
                             index += 6
                         case Node.Building:
                             index += 6
@@ -671,45 +697,41 @@ class Tree:
             return None
         else:
             return random.choice(candidate)
+        
+    def stick(self, branch, par_slot, par_ind):
+        child_ind = len(self.d_tree)
+        offset = len(self.d_tree) - par_ind
+        self.d_tree+=branch.branch.copy()
+        self.d_tree[par_slot] = offset
+        self.d_tree[child_ind+1] = -offset
+        self.nodes += branch.nodes
+        self.diags += branch.diags
+        self.blds += branch.blds
+        self.straights += branch.straights
+        self.diag_slot += branch.diag_slot
+        self.straight_slot += branch.straight_slot
+        self.diag_slot += branch.diag_slot
+        self.bld_slot += branch.bld_slot
+    
+def crossover(parent1, parent2) -> (Tree, Tree):
+    test_child = Tree(parent1)
+    test_child2 = Tree(parent2)
+    index, slot, par_index, nodetype, connecttype = test_child.random_crosspoint()
+    tree2_cross = test_child2.pick_crosspoint(nodetype, connecttype)
+    while tree2_cross is None:
+        index, slot, par_index, nodetype, connecttype = test_child.random_crosspoint()
+        print(index, slot, nodetype, connecttype)
+        tree2_cross = test_child2.pick_crosspoint(nodetype, connecttype)
+    index2, slot2, par_index2 = tree2_cross
+    test_branch = test_child.extract(index, slot)
+    test_branch2 = test_child2.extract(index2, slot2)
+    test_child.stick(test_branch2, slot, par_index)
+    test_child2.stick(test_branch, slot2, par_index2)
+    return (test_child, test_child2)
 
 test_tree = Tree(None)
 test_tree2 = Tree(None)
-print(f"NODES: {test_tree.nodes}")
-
-#testing
-test_tree.cut()
-'''
-alters = 30
-for i in range(alters):
-    test_tree.alter()
-grow = 10
-for i in range(grow):
-    test_tree.grow()
-    '''
-print("---------------------TREE:", test_tree.nodes, test_tree.diags, test_tree.straights, test_tree.blds,
-      test_tree.diag_slot, test_tree.straight_slot, test_tree.bld_slot)
-for item in test_tree.d_tree:
-    print(item)
-test_child = Tree(test_tree)
-test_child2 = Tree(test_tree2)
-index, slot, nodetype, connecttype = test_tree.random_crosspoint()
-print(index, slot, nodetype, connecttype)
-index2, slot2 = test_tree2.pick_crosspoint(nodetype, connecttype)
-print(index2, slot2)
-print("-----------------------OG CHILD:", test_child.nodes, test_child.diags, test_child.straights, test_child.blds,
-      test_child.diag_slot, test_child.straight_slot, test_child.bld_slot)
-for item in test_child.d_tree:
-    print(item)
-test_branch = test_child.extract(index, slot)
-print("-----------------------CHILD:", test_child.nodes, test_child.diags, test_child.straights, test_child.blds,
-      test_child.diag_slot, test_child.straight_slot, test_child.bld_slot)
-for item in test_child.d_tree:
-    print(item)
-print("---------------------BRANCH")
-for item in test_branch:
-    print(item)
-
-
+test_child, test_child2 = crossover(test_tree, test_tree2)
 #class for tower generation
 class Tower:
     def __init__(self, height, width, depth, x, z, rotation) -> None:
@@ -753,7 +775,7 @@ def traverse_tree(tree, index, x, z):
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
                           tree.d_tree[index+4], x, z*expandedness, tree.d_tree[index+2])]
 
-towers = maketowers(test_tree)
+towers = maketowers(test_child)
 
 # The cube class
 class Cube:
