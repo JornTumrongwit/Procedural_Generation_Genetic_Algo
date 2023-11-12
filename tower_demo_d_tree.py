@@ -27,18 +27,18 @@ start = time.time()
 #mode parameters
 depth_test = True
 display = True
-wire = True
+wire = False
 
 #growth parameters
 p_diagonal = 0.8
 p_straight = 0.9
 p_building = 0.3
-nodes_max = 1000
+nodes_max = 2000
 straight_distance = 100
 diagonal_distance = 500
 unit_mod = 10
 start_offset_x = 0
-start_offset_z = -10
+start_offset_z = -20
 expandedness = 0.75 #basically idk what to call the span to x vs span to z
 nodecount = 1000
 
@@ -74,7 +74,7 @@ heightmod = 50
 #Node structure: Type, parent offset, parameters, child offsets
 #The tree
 class Tree:
-    def __init__(self, origin) -> None:
+    def __init__(self, origin, minnodes, maxnodes) -> None:
         if origin == None:
             self.d_tree = []
             self.center()
@@ -85,7 +85,7 @@ class Tree:
             self.straights = 0
             self.blds = 0
             self.nodes = 0
-            create = random.randint(0, nodecount)
+            create = random.randint(minnodes, maxnodes)
             for i in range(create):
                 self.grow()
         else:
@@ -234,7 +234,47 @@ class Tree:
 
         #in the VERY LOW CHANCE that for some reason the randomizer hits that perfect decimal 
         #inaccuracy from 100 just say it's a dud mutation
-    
+
+    #Growing in another form so it'll explore more when mutating
+    def grow_mutate(self, p_mutate) -> None:
+        prob_d = p_diagonal*self.diag_slot
+        prob_s = p_straight*self.straight_slot
+        prob_b = p_building*self.bld_slot
+        totalprob = prob_d + prob_s + prob_b
+        num_b = prob_b*p_mutate/totalprob
+        num_s = prob_s*p_mutate/totalprob
+        num_d = prob_d*p_mutate/totalprob
+        candidates = []
+        index = 0
+        self.nodes += 1
+        #generate
+        while index < len(self.d_tree):
+            choice = random.uniform(0, 1)
+            match self.d_tree[index]:
+                case Node.Center:
+                    index += 5
+                case Node.Building:
+                    index += 6
+                case Node.Diagonal:
+                    if self.d_tree[index+4] == None and choice <= num_d:
+                        self.diagonal(index+4, index)
+                        self.diag_slot -= 1
+                    if self.d_tree[index+5] == None and choice <= num_s:
+                        self.straight(index+5, index)
+                        self.straight_slot -= 1
+                    if self.d_tree[index+6] == None and choice <= num_b:
+                        self.building(index+6, index)
+                        self.bld_slot -= 1
+                    index += 7
+                case Node.Straight:
+                    if self.d_tree[index+4] == None and choice <= num_s:
+                        self.straight(index+4, index)
+                        self.straight_slot -= 1
+                    if self.d_tree[index+5] == None and choice <= num_b:
+                        self.building(index+5, index)
+                        self.bld_slot -= 1
+                    index += 6
+
     #alter
     def alter(self) -> None:
         diag = self.diags
@@ -647,6 +687,8 @@ class Tree:
                     index += 6
                 case Node.Building:
                     index += 6
+        if len(candidates) == 0:
+            return (None, None, None, None)
         return random.choice(candidates)
 
     def pick_crosspoint(self, nodetype, connectType) -> (int, int, int):
@@ -714,8 +756,8 @@ class Tree:
         self.bld_slot += branch.bld_slot
     
 def crossover(parent1, parent2) -> (Tree, Tree):
-    test_child = Tree(parent1)
-    test_child2 = Tree(parent2)
+    test_child = Tree(parent1, None, None)
+    test_child2 = Tree(parent2, None, None)
     index, slot, par_index, nodetype, connecttype = test_child.random_crosspoint()
     tree2_cross = test_child2.pick_crosspoint(nodetype, connecttype)
     while tree2_cross is None:
@@ -729,9 +771,6 @@ def crossover(parent1, parent2) -> (Tree, Tree):
     test_child2.stick(test_branch, slot2, par_index2)
     return (test_child, test_child2)
 
-test_tree = Tree(None)
-test_tree2 = Tree(None)
-test_child, test_child2 = crossover(test_tree, test_tree2)
 #class for tower generation
 class Tower:
     def __init__(self, height, width, depth, x, z, rotation) -> None:
@@ -775,8 +814,6 @@ def traverse_tree(tree, index, x, z):
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
                           tree.d_tree[index+4], x, z*expandedness, tree.d_tree[index+2])]
 
-towers = maketowers(test_child)
-
 # The cube class
 class Cube:
 
@@ -803,6 +840,7 @@ class Cube:
 
     # Initialize
     def init(self):
+        self.towers = None
         # Set background to black
         glClearColor(0.0, 0.0, 0.0, 0.0)
 
@@ -813,7 +851,9 @@ class Cube:
             #Depth testing
             glEnable(GL_DEPTH_TEST)
             glDepthFunc(GL_LESS)
-        
+    
+    def changetower(self, towers):
+        self.towers = towers
 
     # Draw cube
     def draw(self):
@@ -826,7 +866,7 @@ class Cube:
         glScalef(self.zoom, self.zoom, self.zoom)
 
         # Draw solid cube
-        for tower in towers:
+        for tower in self.towers:
             #object transforms
             glPushMatrix()
             glColor3f(1.0, 1.0, 1.0)
@@ -897,77 +937,86 @@ class Cube:
         glutPostRedisplay()
 
 # The main function
-def main():
+def display_towers(towers):
     d_width = len(im[0])
     d_height = len(im)
-    if display:
-        # Initialize OpenGL
-        glutInit(sys.argv)
-        
-        # Set display mode
-        glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
+    # Initialize OpenGL
+    glutInit(sys.argv)
+    
+    # Set display mode
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB)
 
-        # Set size and position of window size
-        glutInitWindowSize(d_width, d_height)
-        glutInitWindowPosition(0, 0)
+    # Set size and position of window size
+    glutInitWindowSize(d_width, d_height)
+    glutInitWindowPosition(0, 0)
 
-        # Create window with given title
-        glutCreateWindow("Cube")
+    # Create window with given title
+    glutCreateWindow("Cube")
 
-        # Instantiate the cube
-        cube = Cube()
+    # Instantiate the cube
+    cube = Cube()
 
-        cube.init()
+    cube.init()
+    cube.changetower(towers)
 
-        # The callback for display function
-        glutDisplayFunc(cube.display)
+    # The callback for display function
+    glutDisplayFunc(cube.display)
 
-        # The callback for reshape function
-        glutReshapeFunc(cube.reshape)
+    # The callback for reshape function
+    glutReshapeFunc(cube.reshape)
 
-        # The callback function for keyboard controls
-        glutSpecialFunc(cube.special)
+    # The callback function for keyboard controls
+    glutSpecialFunc(cube.special)
 
-        # The callback function for normal keyboard controls
-        glutKeyboardFunc(cube.keyb)
-        glutMainLoop()
-    else:
-        # Initialize the library
-        if not glfw.init():
-            return
-        # Set window hint NOT visible
-        glfw.window_hint(glfw.VISIBLE, False)
-        # Create a windowed mode window and its OpenGL context
-        window = glfw.create_window(d_width, d_height, "hidden window", None, None)
-        if not window:
-            glfw.terminate()
-            return
+    # The callback function for normal keyboard controls
+    glutKeyboardFunc(cube.keyb)
+    glutMainLoop()
 
-        # Make the window's context current
-        glfw.make_context_current(window)
-
-        glutInit(sys.argv)
-        
-        # Instantiate the cube
-        cube = Cube()
-
-        cube.init()
-        
-        cube.reshape(d_width, d_height)
-        cube.display()
-        
-        image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
-        imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
-        imagearr = np.flip(imagearr, 0)
-        im2 = np.divide(imagearr, 255/2)
-        im2 = np.add(im2, -1)
-        score = np.sum(np.multiply(im, im2))
-
-        cv2.imwrite(r"testresult.png", imagearr)
-
-        glfw.destroy_window(window)
+def save_towers(towers):
+    d_width = len(im[0])
+    d_height = len(im)
+    # Initialize the library
+    if not glfw.init():
+        return
+    # Set window hint NOT visible
+    glfw.window_hint(glfw.VISIBLE, False)
+    # Create a windowed mode window and its OpenGL context
+    window = glfw.create_window(d_width, d_height, "hidden window", None, None)
+    if not window:
         glfw.terminate()
+        return
+
+    # Make the window's context current
+    glfw.make_context_current(window)
+
+    glutInit(sys.argv)
+    
+    # Instantiate the cube
+    cube = Cube()
+
+    cube.init()
+    cube.changetower(towers)
+    
+    cube.reshape(d_width, d_height)
+    cube.display()
+    
+    image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
+    imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
+    imagearr = np.flip(imagearr, 0)
+    im2 = np.divide(imagearr, 255/2)
+    im2 = np.add(im2, -1)
+    score = np.sum(np.multiply(im, im2))
+
+    cv2.imwrite(r"testresult.png", imagearr)
+
+    glfw.destroy_window(window)
+    glfw.terminate()
 
 # Call the main function
 if __name__ == '__main__':
-    main()
+    test_tree = Tree(None, 0, nodecount)
+    test_tree2 = Tree(None, 0, nodecount)
+    test_child, test_child2 = crossover(test_tree, test_tree2)
+    test_child.grow_mutate(0.1)
+    towers = maketowers(test_child)
+    save_towers(towers)
