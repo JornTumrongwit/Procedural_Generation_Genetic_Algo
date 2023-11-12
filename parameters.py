@@ -1,12 +1,12 @@
 import glm
 #growth parameters
 p_diagonal = 10
-p_straight = 5
+p_straight = 3
 p_building = 1
 nodes_max = 2000
 straight_distance = 75
-min_straight_distance = 50
-diagonal_distance = 10
+min_straight_distance = 100
+diagonal_distance = 40
 min_diagonal_distance = 1
 unit_mod = 6480
 start_offset_x = 0
@@ -20,18 +20,21 @@ v_edge = 100/(unit_mod*expandedness)
 #Tower parameters
 heightmin = 3
 heightmax = 600
-widthmin = 5
-widthmax = 20
+widthmin = 8
+widthmax = 16
 depthmin = 0.5
 depthmax = 2
 heightmod = 50
+
+horizontal_max = 100
+vertical_max = 100
 
 aspect = 1
 image = 'badapple.png'
 
 #Fitness parameters
 bad = -10
-good = 4
+good = 6
 
 #camera
 eye = glm.vec3(0.0, 6.0, 5.0)
