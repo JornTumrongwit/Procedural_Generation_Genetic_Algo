@@ -595,7 +595,7 @@ class Tree:
                             b_bld_slot += 1
                         #Adding stuffs to extracted list
                         item_ind = len(extractlst)
-                        extractlst += self.d_tree[index:index+6]
+                        extractlst += self.d_tree[index:index+straight_offset]
                         if item_ind > 0:
                             extractlst[item_ind+1] = offset
                             match self.d_tree[parent_ind]:
@@ -614,7 +614,7 @@ class Tree:
                         b_blds += 1
                         #Adding stuffs to extracted list
                         item_ind = len(extractlst)
-                        extractlst += self.d_tree[index:index+6]
+                        extractlst += self.d_tree[index:index+building_offset]
                         if item_ind > 0:
                             extractlst[item_ind+1] = offset
                             match self.d_tree[parent_ind]:
@@ -761,49 +761,26 @@ class Tower:
         self.rotation = rotation
 
 def maketowers(tree):
-    for item in tree.d_tree:
-        print(item)
-    print("INDICES")
     return traverse_tree(tree, center_offset)
 
 def traverse_tree(tree, index):
     result = []
-    print(index)
-    print(type(tree), type(index), tree.d_tree[index])
     match tree.d_tree[index]:
         case Node.Diagonal:
             if tree.d_tree[index+diag_offset-3] is not None:
-                print("itemd", type(index+diag_offset-3))
-                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-3])
-                print(get)
-                result+=get
+                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-3])
             if tree.d_tree[index+diag_offset-2] is not None:
-                print("itemd", type(index+diag_offset-2))
-                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-2])
-                print(get)
-                result+=get
+                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-2])
             if tree.d_tree[index+diag_offset-1] is not None:
-                print("itemd", type(index+diag_offset-1))
-                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-1])
-                print(get)
-                result+=get
+                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-1])
             return result
         case Node.Straight:
             if tree.d_tree[index+straight_offset-2] is not None:
-                print("items", type(index+straight_offset-2))
-                get = traverse_tree(tree, index + tree.d_tree[index+straight_offset-2])
-                print(get)
-                result+=get
+                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-2])
             if tree.d_tree[index+straight_offset-1] is not None:
-                print("items", type(index+straight_offset-1))
-                get= traverse_tree(tree, index + tree.d_tree[index+straight_offset-1])
-                print(get)
-                result+=get
+                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-1])
             return result
         case Node.Building:
-            print("itemb", index)
-            print("item", [tree.d_tree[index+5], tree.d_tree[index+3], 
-                          tree.d_tree[index+4], tree.d_tree[index+6], tree.d_tree[index+7]*parameters.expandedness, tree.d_tree[index+2]])
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
                           tree.d_tree[index+4], tree.d_tree[index+6], tree.d_tree[index+7]*parameters.expandedness, tree.d_tree[index+2])]
 
@@ -1049,5 +1026,5 @@ if __name__ == '__main__':
         test_tree.alter()
     test_tree2 = Tree(None, parameters.min_nodes, parameters.nodecount)
     test_child, test_child2 = crossover(test_tree, test_tree2)
-    towers = maketowers(test_child)
+    towers = maketowers(test_child2)
     display_towers(towers)
