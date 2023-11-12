@@ -8,6 +8,7 @@ import cv2
 from enum import Enum
 import imageio.v3 as iio
 import ipympl
+import parameters
 # OpenGL imports for python
 try:
     from OpenGL.GL import *
@@ -18,35 +19,38 @@ try:
 except:
     print("OpenGL wrapper for python not found")
 
-image = 'badapple.png'
+#GA parameters
+p_mu_grow = 0.125
+p_mu_cut = 0.1 + p_mu_grow
+p_mu_alter = 0.18 + p_mu_cut
+nodes = parameters.nodecount
+minnodes = 1
+popsize = 180
+generations = 50
+k_tournament = 10
+elitism = popsize*2//3
+refblur = 30
+resblur = 10
+
+image = parameters.image
 #image
 img = cv2.imread(image)
 assert img is not None, "file could not be read, check with os.path.exists()"
-img = cv2.blur(img,(50,50))
+img = cv2.blur(img,(refblur, refblur))
 cv2.imwrite(r"tester.png", img)
-img = np.divide(img, 255/2)
-img = np.add(img, -1)
+img = np.divide(img, 255/(parameters.good - parameters.bad))
+img = np.add(img, parameters.bad)
 
 im = cv2.imread(image)
-im = cv2.blur(im, (25, 25))
-im = np.divide(im, 255/2)
-im = np.add(im, -1)
-im = np.around(im)
+im = cv2.blur(im, (resblur, resblur))
+im = np.divide(im, 255)
 bestscore = np.sum(np.multiply(im, img))
-print(bestscore)
 d_width = len(im[0])
 d_height = len(im)
+parameters.unit_mod /= len(im)
+parameters.expandedness *= len(im)/len(im[0])
+parameters.aspect = len(im[0])/len(im)
 
-#GA parameters
-p_mu_grow = 0.125
-p_mu_cut = 0.1 
-p_mu_alter = 0.18
-nodes = 3000
-minnodes = 1
-popsize = 180
-generations = 15
-k_tournament = 10
-elitism = popsize//5
 
 # Initialize the library
 glfw.init()
@@ -72,16 +76,14 @@ def render_And_Score(towers):
 
     cube.changetower(towers)
     cube.reshape(d_width, d_height)
-    cube.display()
+    cube.display_nowire()
     
     image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
     imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
     imagearr = np.flip(imagearr, 0)
-    im2 = cv2.blur(imagearr, (25, 25))
+    im2 = cv2.blur(imagearr, (resblur, resblur))
     cv2.imwrite(r"testresult.png", im2)
-    im2 = np.divide(imagearr, 255/2)
-    im2 = np.add(im2, -1)
-    im2 = np.around(im2)
+    im2 = np.divide(imagearr, 255)
     score = np.sum(np.multiply(img, im2))
     return score/bestscore + 1
 
@@ -149,33 +151,35 @@ for i in range(popsize):
 
 cities.sort(key=getlen, reverse = True)
 cities.sort(key=getscore, reverse = True)
-cities = cities[:elitism]
 for gen in range(generations):
     print("GENERATION:", gen)
     print("BEST 3:", cities[0].score, ",", cities[1].score, ",", cities[2].score)
-    while len(cities) < popsize:
+    elites = cities[:elitism]
+    while len(elites) < popsize:
         par1 = roulette_selection(cities)
         par2 = tournament(cities)
         while par1 == par2:
             par2 = tournament(cities)
         test_child_tree, test_child_tree2 = dtree.crossover(par1.tree, par2.tree)
         rng = random.uniform(0, 1)
-        test_child_tree.grow_mutate(p_mu_grow)
-        if rng < p_mu_cut:
+        if rng < p_mu_grow:
+            test_child_tree.grow()
+        elif rng < p_mu_cut:
             test_child_tree.cut()
-        if rng < p_mu_alter:
+        elif rng < p_mu_alter:
             test_child_tree.alter()
         rng = random.uniform(0, 1)
-        test_child_tree2.grow_mutate(p_mu_grow)
-        if rng < p_mu_cut:
+        if rng < p_mu_grow:
+            test_child_tree2.grow()
+        elif rng < p_mu_cut:
             test_child_tree2.cut()
-        if rng < p_mu_alter:
+        elif rng < p_mu_alter:
             test_child_tree2.alter()
-        cities.append(City(test_child_tree))
-        cities.append(City(test_child_tree2))
-    cities.sort(key=getlen, reverse = True)
-    cities.sort(key=getscore, reverse = True)
-    cities = cities[:elitism]
+        elites.append(City(test_child_tree))
+        elites.append(City(test_child_tree2))
+    elites.sort(key=getlen, reverse = True)
+    elites.sort(key=getscore, reverse = True)
+    cities = elites
     print()
 
 towers = dtree.maketowers(cities[0].tree)

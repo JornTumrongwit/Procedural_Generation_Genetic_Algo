@@ -5,6 +5,7 @@ import math
 import time
 import cv2
 from enum import Enum
+import parameters
 # OpenGL imports for python
 try:
     from OpenGL.GL import *
@@ -15,32 +16,10 @@ try:
 except:
     print("OpenGL wrapper for python not found")
 
-#image
-image = 'testimage.png'
-
-im = cv2.imread(image)
-im = np.divide(im, 255/2)
-im = np.add(im, -1)
-bestscore = np.sum(np.multiply(im, im))
-start = time.time()
-
 #mode parameters
 depth_test = True
 display = True
 wire = False
-
-#growth parameters
-p_diagonal = 0.8
-p_straight = 0.9
-p_building = 0.3
-nodes_max = 2000
-straight_distance = 100
-diagonal_distance = 500
-unit_mod = 10
-start_offset_x = 0
-start_offset_z = -20
-expandedness = 0.75 #basically idk what to call the span to x vs span to z
-nodecount = 1000
 
 class Direction(Enum):
     X = 0
@@ -62,14 +41,6 @@ class Branch:
         self.straight_slot = straight_slot
         self.bld_slot = bld_slot
         self.nodes = nodes
-#Tower parameters
-heightmin = 3
-heightmax = 600
-widthmin = 0.5
-widthmax = 2
-depthmin = 0.5
-depthmax = 2
-heightmod = 50
 
 #Node structure: Type, parent offset, parameters, child offsets
 #The tree
@@ -85,9 +56,9 @@ class Tree:
             self.straights = 0
             self.blds = 0
             self.nodes = 0
-            create = random.randint(minnodes, maxnodes)
-            for i in range(create):
-                self.grow()
+            create = random.randint(minnodes, maxnodes) * 7
+            while len(self.d_tree) < create:
+                self.grow_mutate(1)
         else:
             self.d_tree = origin.d_tree.copy()
             self.diags = origin.diags
@@ -100,7 +71,7 @@ class Tree:
 
     #offset = 7
     def diagonal(self, slot_ind, par_ind) -> None:
-        this_distance = random.uniform(0, diagonal_distance)/unit_mod
+        this_distance = random.uniform(parameters.min_diagonal_distance, parameters.diagonal_distance)/parameters.unit_mod
         this_angle = random.uniform(0, 2*math.pi)
         next_diagonal = None
         next_straight = None
@@ -121,7 +92,7 @@ class Tree:
     
     #offset = 6
     def straight(self, slot_ind, par_ind) -> None:
-        this_distance = random.uniform(-straight_distance, straight_distance)/unit_mod
+        this_distance = random.uniform(parameters.min_straight_distance, parameters.straight_distance)/parameters.unit_mod * random.choice([-1, 1])
         this_direction = random.choice(list(Direction))
         next_straight = None
         next_bld = None
@@ -139,8 +110,8 @@ class Tree:
 
     #offset = 5 
     def center(self) -> None:
-        this_x_offset = start_offset_x
-        this_z_offset = start_offset_z
+        this_x_offset = parameters.start_offset_x
+        this_z_offset = parameters.start_offset_z
         next_diagonal = None
         self.d_tree.append(Node.Center)
         self.d_tree.append(0)
@@ -151,9 +122,9 @@ class Tree:
     #offset = 6
     def building(self, slot_ind, par_ind) -> None:
         this_rotation = random.uniform(0, 360)
-        this_width = random.uniform(widthmin, widthmax)
-        this_depth = random.uniform(depthmin, depthmax)*this_width
-        this_height = random.uniform(heightmin/heightmod, heightmax/heightmod)
+        this_width = random.uniform(parameters.widthmin, parameters.widthmax)/parameters.unit_mod
+        this_depth = random.uniform(parameters.depthmin, parameters.depthmax)*this_width
+        this_height = random.uniform(parameters.heightmin/parameters.heightmod, parameters.heightmax/parameters.heightmod)
         offset = len(self.d_tree) - par_ind
         self.d_tree[slot_ind] = offset
         self.d_tree.append(Node.Building)
@@ -166,9 +137,9 @@ class Tree:
 
     #Growing
     def grow(self) -> None:
-        prob_d = p_diagonal*self.diag_slot
-        prob_s = p_straight*self.straight_slot
-        prob_b = p_building*self.bld_slot
+        prob_d = parameters.p_diagonal*self.diag_slot
+        prob_s = parameters.p_straight*self.straight_slot
+        prob_b = parameters.p_building*self.bld_slot
         totalprob = prob_d + prob_s + prob_b
         num_b = prob_b/totalprob
         num_s = prob_s/totalprob + num_b
@@ -237,21 +208,23 @@ class Tree:
 
     #Growing in another form so it'll explore more when mutating
     def grow_mutate(self, p_mutate) -> None:
-        prob_d = p_diagonal*self.diag_slot
-        prob_s = p_straight*self.straight_slot
-        prob_b = p_building*self.bld_slot
-        totalprob = prob_d + prob_s + prob_b
-        num_b = prob_b*p_mutate/totalprob
-        num_s = prob_s*p_mutate/totalprob
-        num_d = prob_d*p_mutate/totalprob
-        candidates = []
         index = 0
-        self.nodes += 1
         #generate
         while index < len(self.d_tree):
+            prob_d = parameters.p_diagonal*self.diag_slot
+            prob_s = parameters.p_straight*self.straight_slot
+            prob_b = parameters.p_building*self.bld_slot
+            totalprob = prob_d + prob_s + prob_b
+            num_b = prob_b*p_mutate/totalprob
+            num_s = prob_s*p_mutate/totalprob
+            num_d = prob_d*p_mutate/totalprob
             choice = random.uniform(0, 1)
             match self.d_tree[index]:
                 case Node.Center:
+                    if self.d_tree[index+4] == None:
+                        self.diagonal(index+4, index)
+                        self.diag_slot -= 1
+                        self.nodes += 1
                     index += 5
                 case Node.Building:
                     index += 6
@@ -259,20 +232,25 @@ class Tree:
                     if self.d_tree[index+4] == None and choice <= num_d:
                         self.diagonal(index+4, index)
                         self.diag_slot -= 1
+                        self.nodes += 1
                     if self.d_tree[index+5] == None and choice <= num_s:
                         self.straight(index+5, index)
                         self.straight_slot -= 1
+                        self.nodes += 1
                     if self.d_tree[index+6] == None and choice <= num_b:
                         self.building(index+6, index)
                         self.bld_slot -= 1
+                        self.nodes += 1
                     index += 7
                 case Node.Straight:
                     if self.d_tree[index+4] == None and choice <= num_s:
                         self.straight(index+4, index)
                         self.straight_slot -= 1
+                        self.nodes += 1
                     if self.d_tree[index+5] == None and choice <= num_b:
                         self.building(index+5, index)
                         self.bld_slot -= 1
+                        self.nodes += 1
                     index += 6
 
     #alter
@@ -297,9 +275,9 @@ class Tree:
                         case _:
                             raise Exception("NOT A NODE")
             index = random.choice(candidate)
-            self.d_tree[index+2] = random.uniform(0, diagonal_distance)/unit_mod
+            self.d_tree[index+2] = random.uniform(0, parameters.diagonal_distance)/parameters.unit_mod
             self.d_tree[index+3] = random.uniform(0, 2*math.pi)
-
+        
         elif rng <= straight:
             while i < len(self.d_tree):
                 if type(self.d_tree[i]) == Node:
@@ -315,7 +293,7 @@ class Tree:
                             raise Exception("NOT A NODE")
                     
             index = random.choice(candidate)
-            self.d_tree[index+2] = random.uniform(-straight_distance, straight_distance)/unit_mod
+            self.d_tree[index+2] = random.uniform(-parameters.straight_distance, parameters.straight_distance)/parameters.unit_mod
             self.d_tree[index+3] = random.choice(list(Direction))
             
         else:
@@ -333,9 +311,9 @@ class Tree:
                             raise Exception("NOT A NODE")
             index = random.choice(candidate)
             self.d_tree[index+2] = random.uniform(0, 360)
-            self.d_tree[index+3] = random.uniform(widthmin, widthmax)
-            self.d_tree[index+4] = random.uniform(depthmin, depthmax)*self.d_tree[index+3]
-            self.d_tree[index+5] = random.uniform(heightmin/heightmod, heightmax/heightmod)
+            self.d_tree[index+3] = random.uniform(parameters.widthmin, parameters.widthmax)
+            self.d_tree[index+4] = random.uniform(parameters.depthmin, parameters.depthmax)*self.d_tree[index+3]
+            self.d_tree[index+5] = random.uniform(parameters.heightmin/parameters.heightmod, parameters.heightmax/parameters.heightmod)
     
     def remove_branch(self, index) -> None:
         if index == 5:
@@ -445,11 +423,10 @@ class Tree:
             result += self.d_tree[slice[0]: slice[1]]
         self.d_tree = result.copy()
 
-    #PAIN
     def cut(self) -> None:
-        prob_d = (1-p_diagonal)*self.diags
-        prob_s = (1-p_straight)*self.straights
-        prob_b = (1-p_building)*self.blds
+        prob_d = (1-parameters.p_diagonal)*self.diags
+        prob_s = (1-parameters.p_straight)*self.straights
+        prob_b = (1-parameters.p_building)*self.blds
         totalprob = prob_d + prob_s + prob_b
         num_b = prob_b/totalprob
         num_s = prob_s/totalprob + num_b
@@ -502,6 +479,7 @@ class Tree:
             pick = random.choice(candidates)
             self.remove_branch(pick)
             self.diag_slot += 1
+
 
     #A different remove can result in an extract, takes in index of the child to cut, and the parent's slot
     def extract(self, index, slot) -> Branch:
@@ -758,12 +736,13 @@ class Tree:
 def crossover(parent1, parent2) -> (Tree, Tree):
     test_child = Tree(parent1, None, None)
     test_child2 = Tree(parent2, None, None)
-    index, slot, par_index, nodetype, connecttype = test_child.random_crosspoint()
-    tree2_cross = test_child2.pick_crosspoint(nodetype, connecttype)
-    while tree2_cross is None:
-        index, slot, par_index, nodetype, connecttype = test_child.random_crosspoint()
-        print(index, slot, nodetype, connecttype)
-        tree2_cross = test_child2.pick_crosspoint(nodetype, connecttype)
+    tree_cross = test_child.pick_crosspoint(Node.Diagonal, Node.Diagonal)
+    if tree_cross is None:
+        return (test_child, test_child2)
+    index, slot, par_index = tree_cross
+    tree2_cross = test_child2.pick_crosspoint(Node.Diagonal, Node.Diagonal)
+    if tree2_cross is None:
+        return (test_child, test_child2)
     index2, slot2, par_index2 = tree2_cross
     test_branch = test_child.extract(index, slot)
     test_branch2 = test_child2.extract(index2, slot2)
@@ -812,7 +791,7 @@ def traverse_tree(tree, index, x, z):
             return result
         case Node.Building:
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
-                          tree.d_tree[index+4], x, z*expandedness, tree.d_tree[index+2])]
+                          tree.d_tree[index+4], x, z*parameters.expandedness, tree.d_tree[index+2])]
 
 # The cube class
 class Cube:
@@ -827,12 +806,12 @@ class Cube:
         self.pos_x = 5.0
         self.pos_z = 0.0
         self.zoom = 0.2
-        self.aspect = len(im[0])/len(im)
-        self.eye = glm.vec3(0.0, 6.0, 5.0)
+        self.aspect = parameters.aspect
+        self.eye = parameters.eye
         self.def_eye = self.eye
-        self.center = glm.vec3(0.0, 0.0, 0.0)
+        self.center = parameters.center
         self.def_center = self.center
-        self.up = glm.vec3(0.0, 1.0, 0.0)
+        self.up = parameters.up
         x = glm.cross(self.up, self.eye-self.center)
         y = glm.cross(self.eye-self.center, x)
         self.up = glm.normalize(y)
@@ -875,10 +854,9 @@ class Cube:
             glScalef(tower.width, tower.height, tower.depth)
             glTranslatef(0.5, 0.5, 0.5)
             glutSolidCube(1.0)
-            if wire:
-                glColor3f(1.0, 0.0, 0.0)
-                glScalef(1.01, 1.01, 1.01)
-                glutWireCube(1.0)
+            glColor3f(1.0, 0.0, 0.0)
+            glScalef(1.01, 1.01, 1.01)
+            glutWireCube(1.0)
             glPopMatrix()
             
 
@@ -890,6 +868,38 @@ class Cube:
 
         # Draw cube
         self.draw()
+
+    # Draw cube
+    def draw_nowire(self):
+
+        # Reset the matrix
+        glLoadIdentity()
+
+        # Set the camera
+        gluLookAt(self.eye[0], self.eye[1], self.eye[2], self.center[0], self.center[1], self.center[0], self.up[0], self.up[1], self.up[2])
+        glScalef(self.zoom, self.zoom, self.zoom)
+
+        # Draw solid cube
+        for tower in self.towers:
+            #object transforms
+            glPushMatrix()
+            glColor3f(1.0, 1.0, 1.0)
+            glTranslatef(tower.x, 0.0, tower.z)
+            glRotatef(tower.rotation, 0.0, 1.0, 0.0)
+            glScalef(tower.width, tower.height, tower.depth)
+            glTranslatef(0.5, 0.5, 0.5)
+            glutSolidCube(1.0)
+            glPopMatrix()
+            
+
+        glFlush()
+
+    # The display function
+    def display_nowire(self):
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        # Draw cube
+        self.draw_nowire()
 
     # The reshape function
     def reshape(self, w, h):
@@ -938,6 +948,7 @@ class Cube:
 
 # The main function
 def display_towers(towers):
+    wire = True
     d_width = len(im[0])
     d_height = len(im)
     # Initialize OpenGL
@@ -998,14 +1009,11 @@ def save_towers(towers):
     cube.changetower(towers)
     
     cube.reshape(d_width, d_height)
-    cube.display()
+    cube.display_nowire()
     
     image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_RGB, OpenGL.GL.GL_UNSIGNED_BYTE)
     imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
     imagearr = np.flip(imagearr, 0)
-    im2 = np.divide(imagearr, 255/2)
-    im2 = np.add(im2, -1)
-    score = np.sum(np.multiply(im, im2))
 
     cv2.imwrite(r"testresult.png", imagearr)
 
@@ -1014,9 +1022,16 @@ def save_towers(towers):
 
 # Call the main function
 if __name__ == '__main__':
-    test_tree = Tree(None, 0, nodecount)
-    test_tree2 = Tree(None, 0, nodecount)
+    im = cv2.imread(parameters.image)
+    im = np.divide(im, 255/2)
+    im = np.add(im, -1)
+    parameters.h_edge *= len(im)
+    parameters.v_edge *= len(im[0])
+    parameters.unit_mod /= len(im)
+    #parameters.expandedness *= len(im)/len(im[0])
+    test_tree = Tree(None, 0, parameters.nodecount)
+    test_tree.cut()
+    test_tree2 = Tree(None, 0, parameters.nodecount)
     test_child, test_child2 = crossover(test_tree, test_tree2)
-    test_child.grow_mutate(0.1)
     towers = maketowers(test_child)
-    save_towers(towers)
+    display_towers(towers)
