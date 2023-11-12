@@ -3,7 +3,8 @@ import glm
 p_diagonal = 10
 p_straight = 3
 p_building = 1
-nodes_max = 2000
+nodes_max = 10
+min_nodes = 10
 straight_distance = 75
 min_straight_distance = 100
 diagonal_distance = 40

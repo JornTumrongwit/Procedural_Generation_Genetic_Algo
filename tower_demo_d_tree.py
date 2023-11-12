@@ -5,6 +5,7 @@ import math
 import time
 import cv2
 from enum import Enum
+from enum import IntEnum
 import parameters
 # OpenGL imports for python
 try:
@@ -21,7 +22,7 @@ depth_test = True
 display = True
 wire = False
 
-class Direction(Enum):
+class Direction(IntEnum):
     X = 0
     Y = 1
 
@@ -32,9 +33,9 @@ class Node(Enum):
     Building = 3 #rotation, width, depth, height
 
 #"grammar"
-diag_offset = 7
-straight_offset = 6
-building_offset = 6
+diag_offset = 9
+straight_offset = 8
+building_offset = 8
 center_offset = 5
 
 class Branch:
@@ -75,15 +76,17 @@ class Tree:
             self.bld_slot = origin.bld_slot
             self.nodes = origin.nodes
     
-    def diag_param(self) -> None:
+    def diag_param(self, x, z) -> None:
         this_distance = random.uniform(parameters.min_diagonal_distance, parameters.diagonal_distance)/parameters.unit_mod
         this_angle = random.uniform(0, 2*math.pi)
         params = []
         params.append(this_distance)
         params.append(this_angle)
+        params.append(x)
+        params.append(z)
         return params
 
-    def diagonal(self, slot_ind, par_ind) -> None:
+    def diagonal(self, slot_ind, par_ind, x, z) -> None:
         next_diagonal = None
         next_straight = None
         next_bld = None 
@@ -91,7 +94,7 @@ class Tree:
         self.d_tree[slot_ind] = offset
         self.d_tree.append(Node.Diagonal)
         self.d_tree.append(-offset)
-        params = self.diag_param()
+        params = self.diag_param(x, z)
         for item in params:
             self.d_tree.append(item)
         self.d_tree.append(next_diagonal)
@@ -102,23 +105,27 @@ class Tree:
         self.straight_slot += 1
         self.bld_slot += 1
     
-    def straight_param(self) -> None:
+    def straight_param(self, x, z, plus_x, plus_z) -> None:
         this_distance = random.uniform(parameters.min_straight_distance, parameters.straight_distance)/parameters.unit_mod * random.choice([-1, 1])
         this_direction = random.choice(list(Direction))
+        x += plus_x
+        z += plus_z
         params = []
         params.append(this_distance)
         params.append(this_direction)
+        params.append(x)
+        params.append(z)
         return params
     
     #offset = 6
-    def straight(self, slot_ind, par_ind) -> None:
+    def straight(self, slot_ind, par_ind, x, z, plus_x, plus_z) -> None:
         next_straight = None
         next_bld = None
         offset = len(self.d_tree) - par_ind
         self.d_tree[slot_ind] = offset
         self.d_tree.append(Node.Straight)
         self.d_tree.append(-offset)
-        params = self.straight_param()
+        params = self.straight_param(x, z, plus_x, plus_z)
         for item in params:
             self.d_tree.append(item)
         self.d_tree.append(next_straight)
@@ -137,7 +144,7 @@ class Tree:
         self.d_tree.append(this_z_offset)
         self.d_tree.append(next_diagonal)
     
-    def bld_param(self):
+    def bld_param(self, x, z):
         this_rotation = random.uniform(0, 360)
         this_width = random.uniform(parameters.widthmin, parameters.widthmax)/parameters.unit_mod
         this_depth = random.uniform(parameters.depthmin, parameters.depthmax)*this_width
@@ -147,15 +154,17 @@ class Tree:
         params.append(this_width)
         params.append(this_depth)
         params.append(this_height)
+        params.append(x)
+        params.append(z)
         return params
 
     #offset = 6
-    def building(self, slot_ind, par_ind) -> None:
+    def building(self, slot_ind, par_ind, x, z) -> None:
         offset = len(self.d_tree) - par_ind
         self.d_tree[slot_ind] = offset
         self.d_tree.append(Node.Building)
         self.d_tree.append(-offset)
-        params = self.bld_param()
+        params = self.bld_param(x, z)
         for item in params:
             self.d_tree.append(item)
         self.blds += 1
@@ -182,14 +191,18 @@ class Tree:
                     index += building_offset
                 elif self.d_tree[index] == Node.Diagonal:
                     if self.d_tree[index+diag_offset-1] == None:
-                        candidates.append((index+diag_offset-1, index))
+                        candidates.append((index+diag_offset-1, index, 
+                                        self.d_tree[index+4] + self.d_tree[index+2] * math.sin(self.d_tree[index+3]),
+                                        self.d_tree[index+5] + self.d_tree[index+2] * math.cos(self.d_tree[index+3])))
                     index += diag_offset
                 elif self.d_tree[index] == Node.Straight:
                     if self.d_tree[index+straight_offset-1] == None:
-                        candidates.append((index+straight_offset-1, index))
+                        candidates.append((index+straight_offset-1, index,
+                                           self.d_tree[index+4] + (1-int(self.d_tree[index+3]))*self.d_tree[index+2],
+                                           self.d_tree[index+5] + int(self.d_tree[index+3])*self.d_tree[index+2]))
                     index += straight_offset
             pick = random.choice(candidates)
-            self.building(pick[0], pick[1])
+            self.building(pick[0], pick[1], pick[2], pick[3])
             self.bld_slot -= 1
 
         elif choice < num_s:
@@ -200,32 +213,34 @@ class Tree:
                     index += building_offset
                 elif self.d_tree[index] == Node.Diagonal:
                     if self.d_tree[index+diag_offset-2] == None:
-                        candidates.append((index+diag_offset-2, index))
+                        candidates.append((index+diag_offset-2, index, self.d_tree[index+4], self.d_tree[index+5],
+                                           self.d_tree[index+2] * math.sin(self.d_tree[index+3]), self.d_tree[index+2] * math.cos(self.d_tree[index+3])))
                     index += diag_offset
                 elif self.d_tree[index] == Node.Straight:
                     if self.d_tree[index+straight_offset-2] == None:
-                        candidates.append((index+straight_offset-2, index))
+                        candidates.append((index+straight_offset-2, index, self.d_tree[index+4], self.d_tree[index+5],
+                                           (1-int(self.d_tree[index+3]))*self.d_tree[index+2], int(self.d_tree[index+3])*self.d_tree[index+2]))
                     index += straight_offset
             pick = random.choice(candidates)
-            self.straight(pick[0], pick[1])
+            self.straight(pick[0], pick[1], pick[2], pick[3], pick[4], pick[5])
             self.straight_slot -= 1
 
         elif choice < num_d:
             while index < len(self.d_tree):
                 if self.d_tree[index] == Node.Center:
                     if self.d_tree[index+center_offset-1] == None:
-                        candidates.append((index+center_offset-1, index))
+                        candidates.append((index+center_offset-1, index, self.d_tree[index+2], self.d_tree[index+3]))
                     index += center_offset
                 elif self.d_tree[index] == Node.Building:
                     index += building_offset
                 elif self.d_tree[index] == Node.Diagonal:
                     if self.d_tree[index+diag_offset-3] == None:
-                        candidates.append((index+diag_offset-3, index))
+                        candidates.append((index+diag_offset-3, index, self.d_tree[index+4], self.d_tree[index+5]))
                     index += diag_offset
                 elif self.d_tree[index] == Node.Straight:
                     index += straight_offset
             pick = random.choice(candidates)
-            self.diagonal(pick[0], pick[1])
+            self.diagonal(pick[0], pick[1], pick[2], pick[3])
             self.diag_slot -= 1
 
         #in the VERY LOW CHANCE that for some reason the randomizer hits that perfect decimal 
@@ -244,7 +259,7 @@ class Tree:
                 if type(self.d_tree[i]) == Node:
                     match self.d_tree[i]:
                         case Node.Diagonal:
-                            candidate.append(i)
+                            candidate.append((i, self.d_tree[i+4], self.d_tree[i+5]))
                             i += diag_offset
                         case Node.Straight:
                             i += straight_offset
@@ -253,10 +268,10 @@ class Tree:
                         case _:
                             raise Exception("NOT A NODE")
             index = random.choice(candidate)
-            params = self.diag_param()
+            params = self.diag_param(index[1], index[2])
             adding = 2
             for item in params:
-                self.d_tree[index+adding] = item
+                self.d_tree[index[0]+adding] = item
                 adding += 1
             
         elif rng <= straight:
@@ -266,7 +281,7 @@ class Tree:
                         case Node.Diagonal:
                             i += diag_offset
                         case Node.Straight:
-                            candidate.append(i)
+                            candidate.append((i, self.d_tree[i+4], self.d_tree[i+5]))
                             i += straight_offset
                         case Node.Building:
                             i += building_offset
@@ -274,10 +289,10 @@ class Tree:
                             raise Exception("NOT A NODE")
                     
             index = random.choice(candidate)
-            params = self.straight_param()
+            params = self.straight_param(index[1], index[2], 0, 0)
             adding = 2
             for item in params:
-                self.d_tree[index+adding] = item
+                self.d_tree[index[0]+adding] = item
                 adding += 1
             
         else:
@@ -289,15 +304,15 @@ class Tree:
                         case Node.Straight:
                             i += straight_offset
                         case Node.Building:
-                            candidate.append(i)
+                            candidate.append((i, self.d_tree[i+5], self.d_tree[i+6]))
                             i += building_offset
                         case _:
                             raise Exception("NOT A NODE")
             index = random.choice(candidate)
-            params = self.bld_param()
+            params = self.bld_param(index[1], index[2])
             adding = 2
             for item in params:
-                self.d_tree[index+adding] = item
+                self.d_tree[index[0]+adding] = item
                 adding += 1
     
     def remove_branch(self, index) -> None:
@@ -746,37 +761,51 @@ class Tower:
         self.rotation = rotation
 
 def maketowers(tree):
-    return traverse_tree(tree, center_offset, tree.d_tree[2], tree.d_tree[3])
+    for item in tree.d_tree:
+        print(item)
+    print("INDICES")
+    return traverse_tree(tree, center_offset)
 
-def traverse_tree(tree, index, x, z):
+def traverse_tree(tree, index):
     result = []
+    print(index)
+    print(type(tree), type(index), tree.d_tree[index])
     match tree.d_tree[index]:
         case Node.Diagonal:
             if tree.d_tree[index+diag_offset-3] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-3], x, z)
+                print("itemd", type(index+diag_offset-3))
+                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-3])
+                print(get)
+                result+=get
             if tree.d_tree[index+diag_offset-2] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-2], 
-                                        x + (tree.d_tree[index+2] * math.sin(tree.d_tree[index+3])), 
-                                        z + (tree.d_tree[index+2] * math.cos(tree.d_tree[index+3])))
+                print("itemd", type(index+diag_offset-2))
+                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-2])
+                print(get)
+                result+=get
             if tree.d_tree[index+diag_offset-1] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-1], 
-                                        x + (tree.d_tree[index+2] * math.sin(tree.d_tree[index+3])), 
-                                        z + (tree.d_tree[index+2] * math.cos(tree.d_tree[index+3])))
+                print("itemd", type(index+diag_offset-1))
+                get = traverse_tree(tree, index + tree.d_tree[index+diag_offset-1])
+                print(get)
+                result+=get
             return result
         case Node.Straight:
-            match tree.d_tree[index+3]:
-                case Direction.X:
-                    x += tree.d_tree[index+2]
-                case Direction.Y:
-                    z += tree.d_tree[index+2]
             if tree.d_tree[index+straight_offset-2] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-2], x, z)
+                print("items", type(index+straight_offset-2))
+                get = traverse_tree(tree, index + tree.d_tree[index+straight_offset-2])
+                print(get)
+                result+=get
             if tree.d_tree[index+straight_offset-1] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-1], x, z)
+                print("items", type(index+straight_offset-1))
+                get= traverse_tree(tree, index + tree.d_tree[index+straight_offset-1])
+                print(get)
+                result+=get
             return result
         case Node.Building:
+            print("itemb", index)
+            print("item", [tree.d_tree[index+5], tree.d_tree[index+3], 
+                          tree.d_tree[index+4], tree.d_tree[index+6], tree.d_tree[index+7]*parameters.expandedness, tree.d_tree[index+2]])
             return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
-                          tree.d_tree[index+4], x, z*parameters.expandedness, tree.d_tree[index+2])]
+                          tree.d_tree[index+4], tree.d_tree[index+6], tree.d_tree[index+7]*parameters.expandedness, tree.d_tree[index+2])]
 
 # The cube class
 class Cube:
@@ -1014,11 +1043,11 @@ if __name__ == '__main__':
     parameters.v_edge *= len(im[0])
     parameters.unit_mod /= len(im)
     #parameters.expandedness *= len(im)/len(im[0])
-    test_tree = Tree(None, 0, parameters.nodecount)
+    test_tree = Tree(None, parameters.min_nodes, parameters.nodecount)
     test_tree.cut()
     for i in range(30):
         test_tree.alter()
-    test_tree2 = Tree(None, 0, parameters.nodecount)
+    test_tree2 = Tree(None, parameters.min_nodes, parameters.nodecount)
     test_child, test_child2 = crossover(test_tree, test_tree2)
     towers = maketowers(test_child)
     display_towers(towers)
