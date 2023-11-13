@@ -105,8 +105,7 @@ class Tree:
         params = self.diag_param(angle, count)
         for item in params:
             self.d_tree.append(item)
-        if params[len(params)-1] != 0:
-            self.diag_slot += 1
+        self.diag_slot += 1
         self.d_tree.append(next_diagonal)
         self.d_tree.append(next_straight)
         self.d_tree.append(next_bld)
@@ -136,8 +135,7 @@ class Tree:
         self.d_tree.append(next_straight)
         self.d_tree.append(next_bld)
         self.straights += 1
-        if params[len(params)-1] != 0:
-            self.straight_slot += 1
+        self.straight_slot += 1
         self.bld_slot += 1
     
     def bld_param(self):
@@ -207,7 +205,7 @@ class Tree:
                                            self.d_tree[index+3] + math.pi/2, parameters.max_straights))
                     index += diag_offset
                 elif self.d_tree[index] == Node.Straight:
-                    if self.d_tree[index+straight_offset-2] == None and self.d_tree[index+4] > 0:
+                    if self.d_tree[index+straight_offset-2] == None:
                         candidates.append((index+straight_offset-2, index, 
                                            self.d_tree[index+3], self.d_tree[index+4]-1))
                     index += straight_offset
@@ -225,7 +223,7 @@ class Tree:
                 elif self.d_tree[index] == Node.Building:
                     index += building_offset
                 elif self.d_tree[index] == Node.Diagonal:
-                    if self.d_tree[index+diag_offset-3] == None and self.d_tree[index+4] > 0:
+                    if self.d_tree[index+diag_offset-3] == None:
                         candidates.append((index+diag_offset-3, index, 
                                            self.d_tree[index+3], self.d_tree[index+4]-1))
                     index += diag_offset
@@ -429,7 +427,7 @@ class Tree:
         num_d = prob_d/totalprob + num_s
         choice = random.uniform(0, 1)
         candidates = []
-        index = 0
+        index = center_offset*4
         #choose
         if choice < num_b:
             while index < len(self.d_tree):
@@ -642,7 +640,7 @@ class Tree:
     #returns: index of child to cut, parent's slot, index of parent, type of parent, type of slot
     def random_crosspoint(self) -> (int, int, int, Node, Node):
         candidates = []
-        index = center_offset
+        index = 0
         while index < len(self.d_tree):
             match self.d_tree[index]:
                 case Node.Center:
