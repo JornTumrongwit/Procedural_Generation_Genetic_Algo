@@ -6,8 +6,6 @@ import math
 import time
 import cv2
 from enum import Enum
-import imageio.v3 as iio
-import ipympl
 import parameters
 # OpenGL imports for python
 try:
@@ -82,7 +80,7 @@ def render_And_Score(towers):
     imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
     imagearr = np.flip(imagearr, 0)
     im2 = cv2.blur(imagearr, (resblur, resblur))
-    #cv2.imwrite(r"testresult.png", im2)
+    cv2.imwrite(r"testresult.png", im2)
     im2 = np.divide(imagearr, 255)
     score = np.sum(np.multiply(img, im2))
     return score/bestscore + 1
