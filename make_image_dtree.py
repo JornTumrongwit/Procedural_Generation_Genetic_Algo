@@ -26,15 +26,12 @@ img = cv2.blur(img,(parameters.refblur, parameters.refblur))
 cv2.imwrite(r"tester.png", img)
 img = np.divide(img, 255/2)
 img = np.add(img, -1)
+img = np.around(img)
 goodtargets = np.count_nonzero(img > 0)
 badtargets = np.count_nonzero(img<0)
 
 im = cv2.imread(image)
 im = cv2.blur(im, (parameters.resblur, parameters.resblur))
-im = np.divide(im, 255)
-match = np.multiply(img, im)
-good = np.sum(match > 0)/goodtargets
-bad = np.sum(match < 0)/badtargets
 d_width = len(im[0])
 d_height = len(im)
 parameters.unit_mod /= len(im)
@@ -75,9 +72,9 @@ def render_And_Score(towers):
     cv2.imwrite(r"testresult.png", im2)
     im2 = np.divide(imagearr, 255)
     match = np.multiply(img, im2)
-    good = np.sum(match > 0)/goodtargets
-    bad = np.sum(match < 0)/badtargets
-    return good * parameters.good + bad * parameters.bad
+    good = np.sum(match > 0.5)/goodtargets
+    bad = np.sum(match < -0.5)/badtargets
+    return good * parameters.good - bad * parameters.bad
 
 def save_result(towers):
     # Instantiate the cube
@@ -115,6 +112,7 @@ def roulette_selection(towns):
         totalfit += town.score - parameters.bad
         fitarr.append(totalfit)
     rng = random.uniform(0, totalfit)
+    parent1 = towns[0]
     for i in range(len(fitarr)):
         if rng <= fitarr[i]:
             parent1 = towns[i]
@@ -141,9 +139,11 @@ for i in range(parameters.popsize):
     test_tree = dtree.Tree(None, parameters.minnodes, parameters.nodes)
     cities.append(City(test_tree))
 
+start = time.time()
 cities.sort(key=getlen, reverse = True)
 cities.sort(key=getscore, reverse = True)
 for gen in range(parameters.generations):
+    genstart = time.time()
     print("GENERATION:", gen)
     print("BEST 3:", cities[0].score, ",", cities[1].score, ",", cities[2].score)
     elites = cities[:parameters.elitism]
@@ -177,6 +177,8 @@ for gen in range(parameters.generations):
         if city.score not in scores:
             scores.add(city.score)
             cities.append(city)
+    genend = time.time()
+    print("GENERATION TIME:", genend-genstart)
     print()
 
 towers = dtree.maketowers(cities[0].tree)
@@ -184,3 +186,6 @@ print(render_And_Score(dtree.maketowers(cities[0].tree)), cities[0].tree.nodes)
 save_result(dtree.maketowers(cities[0].tree))
 glfw.destroy_window(window)
 glfw.terminate()
+end = time.time()
+
+print("TIME SPENT:", end-start)

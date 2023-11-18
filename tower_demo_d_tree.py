@@ -80,7 +80,7 @@ class Tree:
         for i in range(4):
             self.d_tree.append(Node.Center)
             self.d_tree.append(-center_offset)
-            self.d_tree.append((math.pi/2 * i))
+            self.d_tree.append(i)
             self.d_tree.append(center_offset)
             self.d_tree.append(None)
         self.d_tree[1] = 0
@@ -202,7 +202,7 @@ class Tree:
                 elif self.d_tree[index] == Node.Diagonal:
                     if self.d_tree[index+diag_offset-2] == None:
                         candidates.append((index+diag_offset-2, index, 
-                                           self.d_tree[index+3] + math.pi/2, parameters.max_straights))
+                                           self.d_tree[index+3], parameters.max_straights))
                     index += diag_offset
                 elif self.d_tree[index] == Node.Straight:
                     if self.d_tree[index+straight_offset-2] == None:
@@ -677,6 +677,23 @@ class Tree:
         candidate = []
         index = 0
         match nodetype:
+            case Node.Center:
+                while index < len(self.d_tree):
+                    match self.d_tree[index]:
+                        case Node.Center:
+                            slot = 0
+                            match connectType:
+                                case Node.Diagonal:
+                                    slot = center_offset-1
+                            if self.d_tree[index+slot] is not None and slot != 0:
+                                candidate.append((index+self.d_tree[index+slot], index + slot, index))
+                            index += center_offset
+                        case Node.Diagonal:
+                            index += diag_offset
+                        case Node.Straight:
+                            index += straight_offset
+                        case Node.Building:
+                            index += building_offset
             case Node.Diagonal:
                 while index < len(self.d_tree):
                     match self.d_tree[index]:
@@ -802,44 +819,79 @@ class Tower:
         self.rotation = rotation
 
 def maketowers(tree):
-    return traverse_tree(tree, 0, parameters.start_offset_x, parameters.start_offset_z)
+    return traverse_tree(tree, 0, parameters.start_offset_x, parameters.start_offset_z, 0)
 
-def traverse_tree(tree, index, x, z):
+def traverse_tree(tree, index, x, z, angle):
     result = []
-    match tree.d_tree[index]:
-        case Node.Center:
-            if tree.d_tree[index+center_offset-2] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+center_offset-2], x, z)
-            if tree.d_tree[index+center_offset-1] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+center_offset-1], x, z)
-            return result
-        case Node.Diagonal:
-            if tree.d_tree[index+diag_offset-3] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-3],
-                                        x + math.sin(tree.d_tree[index+3])*tree.d_tree[index+2],
-                                        z + math.cos(tree.d_tree[index+3])*tree.d_tree[index+2])
-            if tree.d_tree[index+diag_offset-2] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-2],
-                                        x + math.sin(tree.d_tree[index+3])*tree.d_tree[index+2],
-                                        z + math.cos(tree.d_tree[index+3])*tree.d_tree[index+2])
-            if tree.d_tree[index+diag_offset-1] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+diag_offset-1],
-                                        x + math.sin(tree.d_tree[index+3])*tree.d_tree[index+2],
-                                        z + math.cos(tree.d_tree[index+3])*tree.d_tree[index+2])
-            return result
-        case Node.Straight:
-            if tree.d_tree[index+straight_offset-2] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-2],
-                                        x + math.sin(tree.d_tree[index+3])*tree.d_tree[index+2],
-                                        z + math.cos(tree.d_tree[index+3])*tree.d_tree[index+2])
-            if tree.d_tree[index+straight_offset-1] is not None:
-                result += traverse_tree(tree, index + tree.d_tree[index+straight_offset-1],
-                                        x + math.sin(tree.d_tree[index+3])*tree.d_tree[index+2],
-                                        z + math.cos(tree.d_tree[index+3])*tree.d_tree[index+2])
-            return result
-        case Node.Building:
-            return [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
-                          tree.d_tree[index+4], x, z, tree.d_tree[index+2])]
+    explore = set()
+    explore.add((index, x, z, angle))
+    while len(explore) > 0:
+        nextfront = set()
+        for item in explore:
+            index = item[0]
+            x = item[1]
+            z = item[2]
+            angle = item[3]
+            match tree.d_tree[index]:
+                case Node.Center:
+                    if tree.d_tree[index+center_offset-2] is not None:
+                        nextfront.add((index + tree.d_tree[index+center_offset-2], x, z, 0))
+                    if tree.d_tree[index+center_offset-1] is not None:
+                        nextfront.add((index + tree.d_tree[index+center_offset-1], x, z, tree.d_tree[index+2]))
+                case Node.Diagonal:
+                    if tree.d_tree[index+diag_offset-3] is not None:
+                        if angle < 1 or angle > 2:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-3],
+                                                x ,
+                                                z + tree.d_tree[index+2], angle))
+                        else:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-3],
+                                                x ,
+                                                z - tree.d_tree[index+2], angle))
+                    if tree.d_tree[index+diag_offset-2] is not None:
+                        if angle < 1 or angle > 2:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-2],
+                                                x ,
+                                                z + tree.d_tree[index+2], angle))
+                        else:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-2],
+                                                x ,
+                                                z - tree.d_tree[index+2], angle))
+                    if tree.d_tree[index+diag_offset-1] is not None:
+                        if angle == 0 or angle == 3:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-1],
+                                                x ,
+                                                z + tree.d_tree[index+2], angle))
+                        else:
+                            nextfront.add((index + tree.d_tree[index+diag_offset-1],
+                                                x ,
+                                                z - tree.d_tree[index+2], angle))
+                case Node.Straight:
+                    if tree.d_tree[index+straight_offset-2] is not None:
+                        if angle < 2:
+                            nextfront.add((index + tree.d_tree[index+straight_offset-2],
+                                                x + tree.d_tree[index+2],
+                                                z, angle))
+                        else:
+                            nextfront.add((index + tree.d_tree[index+straight_offset-2],
+                                                x - tree.d_tree[index+2],
+                                                z, angle))
+                    if tree.d_tree[index+straight_offset-1] is not None:
+                        if angle < 2:
+                            nextfront.add((index + tree.d_tree[index+straight_offset-1],
+                                                x + tree.d_tree[index+2],
+                                                z, angle))
+                        else:
+                            nextfront.add((index + tree.d_tree[index+straight_offset-1],
+                                                x - tree.d_tree[index+2],
+                                                z, angle))
+                case Node.Building:
+                    if x > parameters.max_x or z > parameters.max_z or x < parameters.min_x or z < parameters.min_z:
+                        continue
+                    result+= [Tower(tree.d_tree[index+5], tree.d_tree[index+3], 
+                                tree.d_tree[index+4], x, z, tree.d_tree[index+2])]
+        explore = nextfront
+    return result
 
 # The cube class
 class Cube:
