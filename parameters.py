@@ -39,15 +39,15 @@ horizontal_max = 100
 vertical_max = 100
 
 aspect = 1
-image = 'ba_glass.png'
+image = 'badapple.png'
 
 #Fitness parameters
 bad = 10
 good = 2
 
 #camera
-eye = glm.vec3(0.0, 3.0, 10.0)
-center = glm.vec3(0.0, 1.0, -3.0)
+eye = glm.vec3(0.0, 5.0, 8.0)
+center = glm.vec3(0.0, -1.0, -3.0)
 up = glm.vec3(0.0, 3.0, 0.0)
 
 #GA parameters
