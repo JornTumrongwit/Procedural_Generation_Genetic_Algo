@@ -7,6 +7,7 @@ import time
 import cv2
 from enum import Enum
 import parameters
+from statistics import mean
 # OpenGL imports for python
 try:
     from OpenGL.GL import *
@@ -52,12 +53,12 @@ if not window:
 glfw.make_context_current(window)
 
 glutInit(sys.argv)
-cube = dtree.Cube()
+cube = dtree.Cube(parameters.eye, parameters.up, parameters.center)
 cube.init()
 
 def render_And_Score(towers):
     # Instantiate the cube
-    cube = dtree.Cube()
+    cube = dtree.Cube(parameters.eye, parameters.up, parameters.center)
 
     cube.init()
 
@@ -69,7 +70,7 @@ def render_And_Score(towers):
     imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
     imagearr = np.flip(imagearr, 0)
     im2 = cv2.blur(imagearr, (parameters.resblur, parameters.resblur))
-    cv2.imwrite(r"testresult.png", im2)
+    #cv2.imwrite(r"testresult.png", im2)
     im2 = np.divide(imagearr, 255)
     match = np.multiply(img, im2)
     good = np.sum(match > 0.5)/goodtargets
@@ -78,14 +79,21 @@ def render_And_Score(towers):
 
 def save_result(towers):
     # Instantiate the cube
-    cube = dtree.Cube()
+    cube = dtree.Cube(parameters.eye, parameters.up, parameters.center)
 
     cube.init()
 
     cube.changetower(towers)
     cube.reshape(d_width, d_height)
     cube.display()
-    
+    f = open("townfile.txt", "w")
+    f.write(f"{parameters.eye[0]} {parameters.eye[1]} {parameters.eye[2]}\n")
+    f.write(f"{parameters.up[0]} {parameters.up[1]} {parameters.up[2]}\n")
+    f.write(f"{parameters.center[0]} {parameters.center[1]} {parameters.center[2]}\n")
+    f.write(f"{d_width} {d_height}\n")
+    for tower in towers:
+        f.write(f"{tower.height} {tower.width} {tower.depth} {tower.x} {tower.z} {tower.rotation}\n")
+    f.close()
     image_buffer = glReadPixels(0, 0, d_width, d_height, OpenGL.GL.GL_BGR, OpenGL.GL.GL_UNSIGNED_BYTE)
     imagearr = np.frombuffer(image_buffer, dtype=np.uint8).reshape(d_height, d_width, 3)
     imagearr = np.flip(imagearr, 0)
@@ -139,13 +147,20 @@ for i in range(parameters.popsize):
     test_tree = dtree.Tree(None, parameters.minnodes, parameters.nodes)
     cities.append(City(test_tree))
 
+popmean = []
+popbest = []
 start = time.time()
 cities.sort(key=getlen, reverse = True)
 cities.sort(key=getscore, reverse = True)
 for gen in range(parameters.generations):
-    genstart = time.time()
     print("GENERATION:", gen)
     print("BEST 3:", cities[0].score, ",", cities[1].score, ",", cities[2].score)
+    genstats = []
+    for city in cities:
+        genstats.append(city.score)
+    popmean.append(mean(genstats))
+    popbest.append(cities[0].score)
+    genstart = time.time()
     elites = cities[:parameters.elitism]
     while len(elites) < parameters.popsize:
         par1 = roulette_selection(cities)
@@ -181,6 +196,11 @@ for gen in range(parameters.generations):
     print("GENERATION TIME:", genend-genstart)
     print()
 
+genstats = []
+for city in cities:
+    genstats.append(city.score)
+popmean.append(mean(genstats))
+popbest.append(cities[0].score)
 towers = dtree.maketowers(cities[0].tree)
 print(render_And_Score(dtree.maketowers(cities[0].tree)), cities[0].tree.nodes)
 save_result(dtree.maketowers(cities[0].tree))
@@ -189,3 +209,8 @@ glfw.terminate()
 end = time.time()
 
 print("TIME SPENT:", end-start)
+
+f = open("stats.txt", "w")
+for i in range(len(popbest)):
+    f.write(f"{popbest[i]} {popmean[i]}\n")
+f.close()

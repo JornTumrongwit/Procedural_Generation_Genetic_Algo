@@ -897,7 +897,7 @@ def traverse_tree(tree, index, x, z, angle):
 class Cube:
 
     # Constructor for the cube class
-    def __init__(self):
+    def __init__(self, eye, up, center):
         self.rotate_y = 0.0
         self.rotate_x = 0.0
         self.width = 1.0
@@ -907,11 +907,11 @@ class Cube:
         self.pos_z = 0.0
         self.zoom = 0.2
         self.aspect = parameters.aspect
-        self.eye = parameters.eye
+        self.eye = eye
         self.def_eye = self.eye
-        self.center = parameters.center
+        self.center = center
         self.def_center = self.center
-        self.up = parameters.up
+        self.up = up
         x = glm.cross(self.up, self.eye-self.center)
         y = glm.cross(self.eye-self.center, x)
         self.up = glm.normalize(y)
@@ -1047,10 +1047,7 @@ class Cube:
         glutPostRedisplay()
 
 # The main function
-def display_towers(towers):
-    wire = True
-    d_width = len(im[0])
-    d_height = len(im)
+def display_towers(towers, eye, up, center, d_width, d_height):
     # Initialize OpenGL
     glutInit(sys.argv)
     
@@ -1065,7 +1062,7 @@ def display_towers(towers):
     glutCreateWindow("Cube")
 
     # Instantiate the cube
-    cube = Cube()
+    cube = Cube(eye, up, center)
 
     cube.init()
     cube.changetower(towers)
@@ -1103,7 +1100,7 @@ def save_towers(towers):
     glutInit(sys.argv)
     
     # Instantiate the cube
-    cube = Cube()
+    cube = Cube(parameters.eye, parameters.up, parameters.center)
 
     cube.init()
     cube.changetower(towers)
@@ -1136,4 +1133,6 @@ if __name__ == '__main__':
     test_tree2 = Tree(None, parameters.min_nodes, parameters.nodecount)
     test_child, test_child2 = crossover(test_tree, test_tree2)
     towers = maketowers(test_child2)
-    display_towers(towers)
+    d_width = len(im[0])
+    d_height = len(im)
+    display_towers(towers, parameters.eye, parameters.up, parameters.center, d_width, d_height)

@@ -39,7 +39,7 @@ horizontal_max = 100
 vertical_max = 100
 
 aspect = 1
-image = 'testimage.png'
+image = 'ba_glass.png'
 
 #Fitness parameters
 bad = 10
@@ -57,7 +57,7 @@ p_mu_alter = 0.18 + p_mu_cut
 nodes = nodecount
 minnodes = 1
 popsize = 180
-generations = 15
+generations = 130
 k_tournament = 10
 elitism = 40
 refblur = 10
