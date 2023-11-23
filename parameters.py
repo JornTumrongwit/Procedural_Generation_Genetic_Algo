@@ -39,15 +39,15 @@ horizontal_max = 100
 vertical_max = 100
 
 aspect = 1
-image = 'badapple.png'
+image = 'testimage.png'
 
 #Fitness parameters
 bad = 10
 good = 2
 
 #camera
-eye = glm.vec3(0.0, 5.0, 8.0)
-center = glm.vec3(0.0, -1.0, -3.0)
+eye = glm.vec3(0.0, 3.0, 10.0)
+center = glm.vec3(0.0, 1.0, -3.0)
 up = glm.vec3(0.0, 3.0, 0.0)
 
 #GA parameters
@@ -57,11 +57,11 @@ p_mu_alter = 0.18 + p_mu_cut
 nodes = nodecount
 minnodes = 1
 popsize = 180
-generations = 130
+generations = 30
 k_tournament = 10
 elitism = 40
-refblur = 10
-resblur = 30
+refblur = 100
+resblur = 300
 
 
 def clamp(value, input, offset):
